@@ -200,7 +200,7 @@ class Proc:
         self.h = k32.OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION | SYNCHRONIZE, False, pid)
         if not self.h:
             raise OSError("OpenProcess failed: %d" % ctypes.get_last_error())
-        self.buf = ctypes.create_string_buffer(256)
+        self.buf = ctypes.create_string_buffer(512)
         raw = ctypes.create_string_buffer(CONTEXT_SIZE + 16)
         a = ctypes.addressof(raw)
         self._raw = raw
@@ -227,8 +227,9 @@ class Proc:
                 "handles": hc.value, "cpu_s": secs(ft[2]) + secs(ft[3])}
 
     def read(self, addr, n):
+        """Up to the shared buffer's size; readn() for anything larger."""
         got = ctypes.c_size_t(0)
-        if not addr or not k32.ReadProcessMemory(self.h, ctypes.c_void_p(addr), self.buf, n, ctypes.byref(got)) or got.value != n:
+        if not addr or n > len(self.buf) or not k32.ReadProcessMemory(self.h, ctypes.c_void_p(addr), self.buf, n, ctypes.byref(got)) or got.value != n:
             return None
         return self.buf.raw[:n]
 
