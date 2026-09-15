@@ -35,3 +35,6 @@ dayz-mcp.local.toml
 # прибрали -- pbo, підписи й копію ключа.
 off-@*/
 dayz-mcp.local.*.toml
+
+# Python caches from tools/profiler
+__pycache__/
