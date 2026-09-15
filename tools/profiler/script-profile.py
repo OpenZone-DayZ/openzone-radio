@@ -808,7 +808,7 @@ class Sampler:
             out.append("stretches >= %.0f ms where the main thread stayed in one piece of work (what a player feels as a freeze): %d, %.0f ms in all" % (
                 self.min_run_ms, len(all_hitches), sum(r["ms"] for r in all_hitches)))
             for r in sorted(all_hitches, key=lambda r: -r["ms"])[:15]:
-                out.append("  %s  %7.0f ms  %s" % (time.strftime("%H:%M:%S", time.localtime(r["at"])), r["ms"], self.describe(r)))
+                out.append("  %s  %7.0f ms  %s" % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(r["at"])), r["ms"], self.describe(r)))
             out.append("  (engine addresses are named by resolve-samples.py against the same exe)")
         else:
             out.append("no stretch >= %.0f ms in one piece of work on the main thread: nothing here would be felt as a freeze" % self.min_run_ms)
@@ -832,7 +832,7 @@ class Sampler:
             stalls = [(o.stall_ms, tid, o) for tid, o in self.others_cum.items() if o.stall_ms >= self.min_run_ms]
             for ms, tid, o in sorted(stalls, key=lambda s: -s[0])[:8]:
                 out.append("  thread %d%s stood at +0x%X for %.0f ms at %s" % (
-                    tid, self.tname(tid), o.stall_at_rip, ms, time.strftime("%H:%M:%S", time.localtime(o.stall_at))))
+                    tid, self.tname(tid), o.stall_at_rip, ms, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(o.stall_at))))
         return out
 
     def write_csvs(self, prefix, c, seg, all_hitches):
@@ -992,7 +992,7 @@ def run_segment(a, pid, seg, deadline, files):
     report = s.report_lines(c, a.top, all_hitches)
     if files:
         files.say("")
-        files.say("==== segment %d, pid %d: %s ====" % (seg, pid, "the server exited" if exited else "end of run"))
+        files.say("==== segment %d, pid %d: %s at %s ====" % (seg, pid, "the server exited" if exited else "end of run", time.strftime("%Y-%m-%d %H:%M:%S")))
         files.say("\n".join(report))
         s.write_csvs(files.prefix, c, seg, all_hitches)
         print("segment %d written to %s.*" % (seg, files.prefix), flush=True)
@@ -1033,8 +1033,8 @@ def main():
     if not short:
         prefix = a.out or ("script-profile-" + time.strftime("%Y%m%d-%H%M"))
         files = Files(prefix)
-        files.say("==== script-profile monitor started %s: %.1f h, %.0f s windows, %.0f Hz main thread, %.0f Hz other threads, stretch threshold %.0f ms ====" % (
-            time.strftime("%Y-%m-%d %H:%M:%S"), a.hours, a.window, a.hz, a.threads_hz, a.min_run_ms))
+        files.say("==== script-profile monitor started %s (this machine's local time, UTC%s): %.1f h, %.0f s windows, %.0f Hz main thread, %.0f Hz other threads, stretch threshold %.0f ms ====" % (
+            time.strftime("%Y-%m-%d %H:%M:%S"), time.strftime("%z"), a.hours, a.window, a.hz, a.threads_hz, a.min_run_ms))
         print("monitoring %s for %.1f h; files: %s.log / .windows.csv / .threads.csv / .hitches.csv / .functions.csv / .engine.csv" % (a.exe, a.hours, prefix), flush=True)
         print("close this window to stop; nothing is lost but the current minute", flush=True)
     deadline = time.time() + (a.seconds if short else a.hours * 3600)

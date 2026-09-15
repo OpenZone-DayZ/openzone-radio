@@ -765,7 +765,7 @@ public class DzScriptProfiler
             o.Add(F("stretches >= {0:F0} ms where the main thread stayed in one piece of work (what a player feels as a freeze): {1}, {2:F0} ms in all", minRunMs, allHitches.Count, tot));
             List<Stretch> hs = new List<Stretch>(allHitches);
             hs.Sort(delegate (Stretch a, Stretch b) { return b.Ms.CompareTo(a.Ms); });
-            for (int i = 0; i < hs.Count && i < 15; i++) o.Add(F("  {0}  {1,7:F0} ms  {2}", hs[i].At.ToString("HH:mm:ss", Inv), hs[i].Ms, Describe(hs[i])));
+            for (int i = 0; i < hs.Count && i < 15; i++) o.Add(F("  {0}  {1,7:F0} ms  {2}", hs[i].At.ToString("yyyy-MM-dd HH:mm:ss", Inv), hs[i].Ms, Describe(hs[i])));
             o.Add("  (engine addresses are named by resolve-samples.py against the same exe)");
         }
         else o.Add(F("no stretch >= {0:F0} ms in one piece of work on the main thread: nothing here would be felt as a freeze", minRunMs));
@@ -801,7 +801,7 @@ public class DzScriptProfiler
             foreach (KeyValuePair<uint, OtherThread> kv in othersCum) if (kv.Value.StallMs >= minRunMs) stalls.Add(kv);
             stalls.Sort(delegate (KeyValuePair<uint, OtherThread> a, KeyValuePair<uint, OtherThread> b) { return b.Value.StallMs.CompareTo(a.Value.StallMs); });
             for (int i = 0; i < stalls.Count && i < 8; i++)
-                o.Add(F("  thread {0}{1} stood at +0x{2:X} for {3:F0} ms at {4}", stalls[i].Key, TName(stalls[i].Key), stalls[i].Value.StallAtRip, stalls[i].Value.StallMs, stalls[i].Value.StallAt.ToString("HH:mm:ss", Inv)));
+                o.Add(F("  thread {0}{1} stood at +0x{2:X} for {3:F0} ms at {4}", stalls[i].Key, TName(stalls[i].Key), stalls[i].Value.StallAtRip, stalls[i].Value.StallMs, stalls[i].Value.StallAt.ToString("yyyy-MM-dd HH:mm:ss", Inv)));
         }
         return o;
     }
@@ -904,7 +904,7 @@ public class DzScriptProfiler
         if (prefix != null)
         {
             Append(prefix + ".log", "");
-            Append(prefix + ".log", F("==== segment {0}, pid {1}: {2} ====", seg, pid, exited ? "the server exited" : "end of run"));
+            Append(prefix + ".log", F("==== segment {0}, pid {1}: {2} at {3} ====", seg, pid, exited ? "the server exited" : "end of run", Stamp()));
             Append(prefix + ".log", string.Join("\n", report.ToArray()));
             WriteCsvs(prefix, cum, seg, all);
             Console.WriteLine("segment " + seg + " written to " + prefix + ".*");
@@ -937,7 +937,7 @@ public class DzScriptProfiler
                 EnsureHeader(prefix + ".windows.csv", "time,segment,pid,samples,engine_pct,interp_pct,native_pct,hitches,hitch_ms,max_hitch_ms,private_mb,ws_mb,handles,threads,cpu_pct,mods,top");
                 EnsureHeader(prefix + ".hitches.csv", "time,segment,pid,ms,kind,description");
                 EnsureHeader(prefix + ".threads.csv", "time,segment,pid,tid,name,samples,exe_pct,cpu_ms,top,module,stall_ms");
-                Append(prefix + ".log", F("==== script-profile monitor started {0}: {1:F1} h, {2:F0} s windows, {3:F0} Hz main thread, {4:F0} Hz other threads, stretch threshold {5:F0} ms ====", Stamp(), hours, windowSec, hz, threadsHz, minRunMs));
+                Append(prefix + ".log", F("==== script-profile monitor started {0} (this machine's local time, UTC{1}): {2:F1} h, {3:F0} s windows, {4:F0} Hz main thread, {5:F0} Hz other threads, stretch threshold {6:F0} ms ====", Stamp(), DateTimeOffset.Now.ToString("zzz", Inv), hours, windowSec, hz, threadsHz, minRunMs));
                 Console.WriteLine(F("monitoring {0} for {1:F1} h; files: {2}.log / .windows.csv / .threads.csv / .hitches.csv / .functions.csv / .engine.csv", exeName, hours, prefix));
                 Console.WriteLine("close this window to stop; nothing is lost but the current minute");
             }
