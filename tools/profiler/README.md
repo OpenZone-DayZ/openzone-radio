@@ -17,13 +17,57 @@ which is a measurement, not a theory.
 
 | file | runs where | needs |
 |---|---|---|
+| `script-profile.ps1` | the machine running the server | nothing (Windows PowerShell) |
+| `script-profile.py` | the machine running the server | Python 3, standard library only |
 | `collect-samples.ps1` | the machine running the server | nothing (Windows PowerShell) |
+| `collect-memory.ps1` | the machine running the server | nothing (Windows PowerShell) |
 | `resolve-samples.py` | anywhere the server exe is available | Python 3, `pefile`, `capstone` |
 | `profile-live.py` | one box that has both | Python 3, `pefile`, `capstone` |
 | `dayz_image.py` | library for the two Python tools | — |
 
-The split exists so the server's machine needs nothing installed: the collector
-records addresses and nothing else, and the naming happens elsewhere.
+Two profilers, two questions:
+
+- **`script-profile`** — *which script function, from which mod, is the main
+  thread running?* It reads the Enforce VM's own call stack on every sample,
+  so the answer is `PluginManager.MainOnUpdate (vanilla scripts/4_World/plugins/pluginmanager.c:144)`
+  and a table of time per mod. Start here: on a busy server most of the main
+  thread is script, and this says whose.
+- **`collect-samples` + `resolve-samples`** — *which engine function is any
+  thread running?* Addresses only; the naming happens elsewhere, so the
+  server's machine needs nothing installed. Use it when the script profiler
+  says the time is not in script.
+
+## Script profiler
+
+On the server's machine, from an elevated PowerShell, while the problem is
+happening:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File script-profile.ps1 -Seconds 60 -Out lag-script.csv
+```
+
+or, where Python 3 exists, `python script-profile.py --seconds 60 --out lag-script.csv`
+(same output; the `.ps1` is a port for machines without Python). Then the same
+once more in a calm state, for the comparison. The report has:
+
+- the split of the main thread into *engine only*, *interpreting script*, and
+  *engine natives called from script* — the last one is engine work done on
+  behalf of script (`GetObjectsAtPosition`, map lookups, RPC sends) and counts
+  for the script that asked;
+- **time per mod**, from the file the compiler recorded for each function:
+  `vanilla`, `JM/CF`, `VPPAdminTools`, `OpenZone_Radio`, ...;
+- the hottest functions, self and inclusive, with file and line;
+- who calls the hottest ones;
+- **stretches where the script stack did not change** for 100 ms or more. A
+  frame loop normally changes its stack hundreds of times a second; one stack
+  standing for half a second *is* a stall, and the report names it.
+
+The profiler reads the process and never writes to it. Its offsets are for one
+build of `DayZServer_x64.exe` (2026-08-13, 16,965,176 bytes); it checks two of
+them at start and refuses another build instead of guessing. After a game
+update they have to be re-read; the header of `script-profile.py` lists what.
+
+## Engine profiler
 
 ## Procedure
 
