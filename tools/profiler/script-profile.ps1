@@ -1,49 +1,69 @@
 ﻿<#
 .SYNOPSIS
-Script-level profiler for the retail DayZ server: which script function, in
-which mod's file, the main thread is running -- without Python.
+Script-level profiler and long-run monitor for the retail DayZ server:
+which script function, from which mod, the main thread is running, and every
+freeze of that thread -- without Python, for hours, surviving server restarts.
 
 .DESCRIPTION
 Same method as script-profile.py: samples the main thread of
 DayZServer_x64.exe and on every sample reads the Enforce VM's own call stack.
-Each sample says which script function was running, from which mod's file,
-and whether the time went into interpreting script or into an engine native
-the script called. Nothing is installed; the game process is only read.
+Nothing is installed; the game process is only read, never written.
 
-Run it from an elevated PowerShell (the server usually runs elevated too):
+Double-click profile-server.bat, or from PowerShell:
 
-    powershell -ExecutionPolicy Bypass -File script-profile.ps1 -Seconds 60 -Out lag-script.csv
+    powershell -ExecutionPolicy Bypass -File script-profile.ps1
+        the monitor (24 h by default): every minute one window goes to
+        <out>.log and <out>.windows.csv, every freeze of the main thread to
+        <out>.hitches.csv, the cumulative <out>.functions.csv and
+        <out>.engine.csv are rewritten; when the server restarts it waits for
+        the new process and carries on. Closing the window at any moment
+        loses at most the current minute. Files land next to this script.
 
-Offsets are for DayZServer_x64.exe of 2026-08-13 (16,965,176 bytes). The
-script checks the interpreter's code and the script context at start and
-refuses another build. See script-profile.py for the structures it reads.
+    powershell -ExecutionPolicy Bypass -File script-profile.ps1 -Seconds 60
+        one window, the report on the screen: for a problem happening now.
 
-.PARAMETER ProcessIdToSample
-Process id of the server. Default: the DayZServer_x64.exe started with -server.
+The script elevates itself (the server usually runs elevated). Offsets are
+for DayZServer_x64.exe of 2026-08-13 (16,965,176 bytes); a different build is
+refused rather than guessed. See script-profile.py for the structures read.
+
+.PARAMETER Hours
+How long the monitor runs (default 24).
 
 .PARAMETER Seconds
-How long to sample (default 60).
-
-.PARAMETER Hz
-Samples per second (default 200).
+Sample this long and print the report instead of monitoring.
 
 .PARAMETER Out
-Optional CSV with every function's counts, for a later comparison.
+File prefix (default: script-profile-<date> next to this script).
 #>
 param(
     [int]$ProcessIdToSample = 0,
     [string]$Exe = "DayZServer_x64.exe",
-    [double]$Seconds = 60,
+    [double]$Seconds = 0,
+    [double]$Hours = 24,
+    [double]$Window = 60,
     [double]$Hz = 200,
     [int]$Top = 30,
-    [double]$MinRunMs = 100,
-    [string]$Out = ""
+    [double]$MinRunMs = 150,
+    [string]$Out = "",
+    [switch]$NoElevate
 )
+
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin -and -not $NoElevate) {
+    $argList = @("-ExecutionPolicy", "Bypass", "-NoExit", "-File", ('"' + $PSCommandPath + '"'),
+                 "-ProcessIdToSample", $ProcessIdToSample, "-Exe", $Exe, "-Seconds", $Seconds, "-Hours", $Hours,
+                 "-Window", $Window, "-Hz", $Hz, "-Top", $Top, "-MinRunMs", $MinRunMs)
+    if ($Out -ne "") { $argList += @("-Out", ('"' + $Out + '"')) }
+    Write-Host "the server runs elevated, so this asks for elevation too..."
+    Start-Process powershell.exe -Verb RunAs -ArgumentList $argList
+    exit
+}
 
 $src = @'
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -58,30 +78,17 @@ public class DzScriptProfiler
     [DllImport("kernel32.dll")] static extern uint ResumeThread(IntPtr h);
     [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetThreadContext(IntPtr h, IntPtr ctx);
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+    [DllImport("kernel32.dll")] static extern uint WaitForSingleObject(IntPtr h, uint ms);
     [DllImport("winmm.dll")] static extern uint timeBeginPeriod(uint ms);
     [DllImport("winmm.dll")] static extern uint timeEndPeriod(uint ms);
     [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr CreateWaitableTimerExW(IntPtr attrs, IntPtr name, uint flags, uint access);
     [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetWaitableTimer(IntPtr h, ref long due, int period, IntPtr routine, IntPtr arg, bool resume);
-    [DllImport("kernel32.dll")] static extern uint WaitForSingleObject(IntPtr h, uint ms);
 
-    // Thread.Sleep rounds to the scheduler tick (15.6 ms for a background
-    // process on Windows 10+), which would cap the rate at ~70 Hz. A
-    // high-resolution waitable timer keeps 200 Hz honest.
-    IntPtr napTimer = IntPtr.Zero;
-    void Nap(double ms)
-    {
-        if (napTimer != IntPtr.Zero)
-        {
-            long due = -(long)(ms * 10000.0);
-            if (SetWaitableTimer(napTimer, ref due, 0, IntPtr.Zero, IntPtr.Zero, false)) { WaitForSingleObject(napTimer, 1000); return; }
-        }
-        System.Threading.Thread.Sleep((int)Math.Max(1.0, ms));
-    }
-
-    const uint PROCESS_VM_READ = 0x10, PROCESS_QUERY_INFORMATION = 0x400;
+    const uint PROCESS_VM_READ = 0x10, PROCESS_QUERY_INFORMATION = 0x400, SYNCHRONIZE = 0x100000;
     const uint THREAD_ALL = 0x0002 | 0x0008 | 0x0040;
+    const uint WAIT_TIMEOUT = 0x102;
     const int CONTEXT_CONTROL_INTEGER = 0x00100003;
-    const int CONTEXT_SIZE = 1232, OFF_RIP = 0xF8, OFF_FLAGS = 0x30;
+    const int CONTEXT_SIZE = 1232, OFF_RIP = 0xF8, OFF_RSP = 0x98, OFF_FLAGS = 0x30;
 
     // --- the engine build these were read from ------------------------------
     const long INTERP_LO = 0x2E01E0, VM_LO = 0x2C5000, VM_HI = 0x2E9000, CTX_GLOBAL = 0xF23610;
@@ -93,19 +100,84 @@ public class DzScriptProfiler
     const int CLS_NAME = 0x10, CLS_FUNCS = 0x68, CLS_FUNC_COUNT = 0x74;
     const int MAX_DEPTH = 256;
     static readonly Regex ModdedSuffix = new Regex(@"@\d+#\d+$");
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
+    // ---- process state -------------------------------------------------------
     IntPtr h;
+    Process proc;
+    int pid;
     IntPtr ctxRaw, ctxBuf;
     byte[] zeros = new byte[CONTEXT_SIZE];
     byte[] small = new byte[512];
+    byte[] frames = new byte[MAX_DEPTH * FRAME_SIZE];
     Dictionary<uint, IntPtr> threads = new Dictionary<uint, IntPtr>();
+    long exeBase, exeHi, vlo, vhi, cs;
+    uint mainTid;
+    long lastRsp;
+    List<ProcessModule> mods = new List<ProcessModule>();
+    IntPtr napTimer = IntPtr.Zero;
+    static volatile bool stopRequested = false;
 
+    // ---- names --------------------------------------------------------------
     class Info { public string Name; public string Mod; public string File; public int Line; public bool IsScript; }
     class Dbg { public long Start; public uint[] Offs; public ushort[] Lines; public ushort[] Fidx; public long Files; public Dictionary<int, string> Cache = new Dictionary<int, string>(); }
     Dictionary<long, Info> infos = new Dictionary<long, Info>();
     Dictionary<long, Dictionary<long, KeyValuePair<uint, string>>> classMaps = new Dictionary<long, Dictionary<long, KeyValuePair<uint, string>>>();
     Dictionary<long, Dbg> dbgs = new Dictionary<long, Dbg>();
     Dictionary<long, bool> scriptFlag = new Dictionary<long, bool>();
+
+    // ---- counters -----------------------------------------------------------
+    class Counters
+    {
+        public Dictionary<long, int> Self = new Dictionary<long, int>(), Native = new Dictionary<long, int>(), Incl = new Dictionary<long, int>(),
+            Owner = new Dictionary<long, int>(), OwnerNative = new Dictionary<long, int>(), EngineOff = new Dictionary<long, int>();
+        public Dictionary<string, int> EngineMod = new Dictionary<string, int>();
+        public Dictionary<long, Dictionary<long, int>> Callers = new Dictionary<long, Dictionary<long, int>>();
+        public int Total, Engine, Interp, NativeN, VmEntry;
+        public void Add(Counters o)
+        {
+            Merge(Self, o.Self); Merge(Native, o.Native); Merge(Incl, o.Incl); Merge(Owner, o.Owner); Merge(OwnerNative, o.OwnerNative); Merge(EngineOff, o.EngineOff);
+            foreach (KeyValuePair<string, int> kv in o.EngineMod) Bump(EngineMod, kv.Key, kv.Value);
+            foreach (KeyValuePair<long, Dictionary<long, int>> kv in o.Callers)
+            {
+                Dictionary<long, int> c;
+                if (!Callers.TryGetValue(kv.Key, out c)) { c = new Dictionary<long, int>(); Callers[kv.Key] = c; }
+                Merge(c, kv.Value);
+            }
+            Total += o.Total; Engine += o.Engine; Interp += o.Interp; NativeN += o.NativeN; VmEntry += o.VmEntry;
+        }
+        public double Pct(int n) { return 100.0 * n / Math.Max(1, Total); }
+    }
+    class Stretch { public string Kind; public long Key; public int N; public double First, Last, Ms; public DateTime At; public Dictionary<long, int> Spots = new Dictionary<long, int>(); }
+
+    Counters win = new Counters(), cum = new Counters();
+    Stretch run = null;
+    List<Stretch> hitchesWin = new List<Stretch>();
+    double periodMs, minRunMs;
+
+    static void Bump(Dictionary<long, int> d, long k) { int v; d.TryGetValue(k, out v); d[k] = v + 1; }
+    static void Bump(Dictionary<string, int> d, string k, int by) { int v; d.TryGetValue(k, out v); d[k] = v + by; }
+    static void Merge(Dictionary<long, int> d, Dictionary<long, int> o) { foreach (KeyValuePair<long, int> kv in o) { int v; d.TryGetValue(kv.Key, out v); d[kv.Key] = v + kv.Value; } }
+    static List<KeyValuePair<long, int>> Sorted(Dictionary<long, int> d)
+    {
+        List<KeyValuePair<long, int>> l = new List<KeyValuePair<long, int>>(d);
+        l.Sort(delegate (KeyValuePair<long, int> a, KeyValuePair<long, int> b) { return b.Value.CompareTo(a.Value); });
+        return l;
+    }
+    static List<KeyValuePair<string, int>> SortedS(Dictionary<string, int> d)
+    {
+        List<KeyValuePair<string, int>> l = new List<KeyValuePair<string, int>>(d);
+        l.Sort(delegate (KeyValuePair<string, int> a, KeyValuePair<string, int> b) { return b.Value.CompareTo(a.Value); });
+        return l;
+    }
+    static string Csv(string s)
+    {
+        if (s == null) return "";
+        if (s.IndexOfAny(new char[] { ',', '"', '\n' }) < 0) return s;
+        return "\"" + s.Replace("\"", "\"\"") + "\"";
+    }
+    static string F(string fmt, params object[] args) { return string.Format(Inv, fmt, args); }
+    static string Stamp() { return DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", Inv); }
 
     // ---- process access ------------------------------------------------------
     bool Read(long addr, byte[] buf, int n)
@@ -132,11 +204,7 @@ public class DzScriptProfiler
     IntPtr ThreadHandle(uint tid)
     {
         IntPtr th;
-        if (!threads.TryGetValue(tid, out th))
-        {
-            th = OpenThread(THREAD_ALL, false, tid);
-            threads[tid] = th;
-        }
+        if (!threads.TryGetValue(tid, out th)) { th = OpenThread(THREAD_ALL, false, tid); threads[tid] = th; }
         return th;
     }
     // rip of a thread, or -1. With hold=true the thread stays suspended so the
@@ -153,20 +221,44 @@ public class DzScriptProfiler
             Marshal.WriteInt32(ctxBuf, OFF_FLAGS, CONTEXT_CONTROL_INTEGER);
             if (!GetThreadContext(th, ctxBuf)) return -1;
             ok = true;
+            lastRsp = Marshal.ReadInt64(ctxBuf, OFF_RSP);
             return Marshal.ReadInt64(ctxBuf, OFF_RIP);
         }
-        finally
-        {
-            if (!(ok && hold)) ResumeThread(th);
-        }
+        finally { if (!(ok && hold)) ResumeThread(th); }
     }
-    void Release(uint tid)
+    void Release(uint tid) { IntPtr th; if (threads.TryGetValue(tid, out th) && th != IntPtr.Zero) ResumeThread(th); }
+    bool Alive() { return WaitForSingleObject(h, 0) == WAIT_TIMEOUT; }
+    string ModuleOf(long addr)
     {
-        IntPtr th;
-        if (threads.TryGetValue(tid, out th) && th != IntPtr.Zero) ResumeThread(th);
+        foreach (ProcessModule m in mods)
+        {
+            long b = m.BaseAddress.ToInt64();
+            if (addr >= b && addr < b + m.ModuleMemorySize) return m.ModuleName;
+        }
+        return "?";
+    }
+    long ExeCaller(long rsp)
+    {
+        byte[] b = new byte[0x400];
+        if (!Read(rsp, b, b.Length)) return 0;
+        for (int off = 0; off + 8 <= b.Length; off += 8)
+        {
+            long v = BitConverter.ToInt64(b, off);
+            if (v >= exeBase && v < exeHi) return v - exeBase;
+        }
+        return 0;
+    }
+    void Nap(double ms)
+    {
+        if (napTimer != IntPtr.Zero)
+        {
+            long due = -(long)(ms * 10000.0);
+            if (SetWaitableTimer(napTimer, ref due, 0, IntPtr.Zero, IntPtr.Zero, false)) { WaitForSingleObject(napTimer, 1000); return; }
+        }
+        System.Threading.Thread.Sleep((int)Math.Max(1.0, ms));
     }
 
-    // ---- names ---------------------------------------------------------------
+    // ---- names --------------------------------------------------------------
     static string ModOf(string path)
     {
         if (path == null) return "?";
@@ -199,13 +291,11 @@ public class DzScriptProfiler
             if (cname == null) cname = "?";
             for (uint j = 0; j < k; j++)
             {
-                long F = BitConverter.ToInt64(fp, (int)(j * 8));
-                // A subclass's table repeats every inherited descriptor, so a
-                // function appears in its defining class and in every class
-                // below it. The defining class has the FEWEST functions.
+                long Fd = BitConverter.ToInt64(fp, (int)(j * 8));
+                // A subclass's table repeats every inherited descriptor; the
+                // defining class is the one with the FEWEST functions.
                 KeyValuePair<uint, string> old;
-                if (F != 0 && (!m.TryGetValue(F, out old) || k < old.Key))
-                    m[F] = new KeyValuePair<uint, string>(k, cname);
+                if (Fd != 0 && (!m.TryGetValue(Fd, out old) || k < old.Key)) m[Fd] = new KeyValuePair<uint, string>(k, cname);
             }
         }
         return m;
@@ -251,91 +341,86 @@ public class DzScriptProfiler
         file = s; line = d.Lines[i];
         return true;
     }
-    bool IsScript(long F)
+    bool IsScript(long Fd)
     {
         bool v;
-        if (!scriptFlag.TryGetValue(F, out v)) { v = (U32(F + FUNC_FLAGS) & FUNC_FLAG_SCRIPT) != 0; scriptFlag[F] = v; }
+        if (!scriptFlag.TryGetValue(Fd, out v)) { v = (U32(Fd + FUNC_FLAGS) & FUNC_FLAG_SCRIPT) != 0; scriptFlag[Fd] = v; }
         return v;
     }
-    Info Get(long F)
+    Info Get(long Fd)
     {
         Info r;
-        if (infos.TryGetValue(F, out r)) return r;
+        if (infos.TryGetValue(Fd, out r)) return r;
         r = new Info(); r.Name = "?"; r.Mod = "?"; r.Line = 0;
-        infos[F] = r;
-        if (F == 0) return r;
-        string fname = CStr(Q(F + FUNC_NAME), 200);
-        long M = fname != null ? Q(F + FUNC_MODULE) : 0;
+        infos[Fd] = r;
+        if (Fd == 0) return r;
+        string fname = CStr(Q(Fd + FUNC_NAME), 200);
+        long M = fname != null ? Q(Fd + FUNC_MODULE) : 0;
         if (fname == null || M == 0) return r;
         KeyValuePair<uint, string> hit;
-        string cname = ClassMap(M).TryGetValue(F, out hit) ? ModdedSuffix.Replace(hit.Value, "") : "";
+        string cname = ClassMap(M).TryGetValue(Fd, out hit) ? ModdedSuffix.Replace(hit.Value, "") : "";
         r.Name = cname.Length > 0 ? cname + "." + fname : fname;
-        r.IsScript = IsScript(F);
+        r.IsScript = IsScript(Fd);
         if (r.IsScript)
         {
             string file; int line;
-            FileLine(M, Q(F + FUNC_CODE), out file, out line);
+            FileLine(M, Q(Fd + FUNC_CODE), out file, out line);
             r.File = file; r.Line = line; r.Mod = ModOf(file);
         }
         else r.Mod = "native";
         return r;
     }
-    string Where(long F)
+    string Where(long Fd)
     {
-        Info i = Get(F);
+        Info i = Get(Fd);
         if (i.Mod == "native") return "[engine native]";
         return i.Mod + "  " + (i.File == null ? "?" : i.File.Replace('\\', '/')) + ":" + i.Line;
     }
-    static void Bump(Dictionary<long, int> d, long k) { int v; d.TryGetValue(k, out v); d[k] = v + 1; }
-    static void Bump(Dictionary<string, int> d, string k) { int v; d.TryGetValue(k, out v); d[k] = v + 1; }
-    static List<KeyValuePair<long, int>> Sorted(Dictionary<long, int> d)
+    string Describe(Stretch r)
     {
-        List<KeyValuePair<long, int>> l = new List<KeyValuePair<long, int>>(d);
-        l.Sort(delegate (KeyValuePair<long, int> a, KeyValuePair<long, int> b) { return b.Value.CompareTo(a.Value); });
-        return l;
-    }
-    static string Csv(string s)
-    {
-        if (s == null) return "";
-        if (s.IndexOfAny(new char[] { ',', '"', '\n' }) < 0) return s;
-        return "\"" + s.Replace("\"", "\"\"") + "\"";
-    }
-
-    // ---- the run --------------------------------------------------------------
-    public static string Run(int pid, string exeName, double seconds, double hz, int top, double minRunMs, string outCsv)
-    {
-        DzScriptProfiler p = new DzScriptProfiler();
-        return p.RunInner(pid, exeName, seconds, hz, top, minRunMs, outCsv);
+        List<KeyValuePair<long, int>> spots = Sorted(r.Spots);
+        List<string> parts = new List<string>();
+        if (r.Kind == "script")
+        {
+            Info root = Get(r.Key);
+            for (int i = 0; i < spots.Count && i < 3; i++) parts.Add(F("{0} {1:F0}%", Get(spots[i].Key).Name, 100.0 * spots[i].Value / r.N));
+            return F("script entered at {0} ({1}); inside: {2}", root.Name, root.Mod, string.Join(", ", parts.ToArray()));
+        }
+        if (r.Kind == "engine")
+        {
+            for (int i = 0; i < spots.Count && i < 3; i++) parts.Add(F("+0x{0:X} {1:F0}%", spots[i].Key, 100.0 * spots[i].Value / r.N));
+            return "engine, no script on the stack; at " + string.Join(", ", parts.ToArray());
+        }
+        for (int i = 0; i < spots.Count && i < 2; i++) if (spots[i].Key != 0) parts.Add(F("+0x{0:X} {1:F0}%", spots[i].Key, 100.0 * spots[i].Value / r.N));
+        return F("in {0}, a wait or a system call that did not return; called from {1}", r.Kind, parts.Count > 0 ? string.Join(", ", parts.ToArray()) : "?");
     }
 
-    string RunInner(int pid, string exeName, double seconds, double hz, int top, double minRunMs, string outCsv)
+    // ---- attach ---------------------------------------------------------------
+    // "" on success, "fatal: ..." for a build that does not match, another
+    // message when the process cannot be read yet (still loading).
+    string Attach(int wantPid, string exeName, Action<string> say)
     {
-        StringBuilder o = new StringBuilder();
-        Process proc;
-        long exeBase;
+        pid = wantPid;
         try
         {
             proc = Process.GetProcessById(pid);
             exeBase = proc.MainModule.BaseAddress.ToInt64();
+            exeHi = exeBase + proc.MainModule.ModuleMemorySize;
+            mods.Clear();
+            foreach (ProcessModule m in proc.Modules) mods.Add(m);
         }
-        catch (Exception e)
-        {
-            return "cannot open pid " + pid + " (run this from an elevated PowerShell?): " + e.Message;
-        }
-        h = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, false, pid);
+        catch (Exception e) { return "cannot open pid " + pid + " (is this window elevated, like the server?): " + e.Message; }
+        h = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION | SYNCHRONIZE, false, pid);
         if (h == IntPtr.Zero) return "OpenProcess failed: " + Marshal.GetLastWin32Error();
-        ctxRaw = Marshal.AllocHGlobal(CONTEXT_SIZE + 16);
-        ctxBuf = (IntPtr)((ctxRaw.ToInt64() + 15) & ~15L);
-
+        if (ctxRaw == IntPtr.Zero) { ctxRaw = Marshal.AllocHGlobal(CONTEXT_SIZE + 16); ctxBuf = (IntPtr)((ctxRaw.ToInt64() + 15) & ~15L); }
         byte[] shape = new byte[8];
-        if (!Read(exeBase + INTERP_LO, shape, 8) || !StructuralEq(shape, INTERP_SHAPE))
-            return string.Format("the interpreter at +0x{0:X} does not look like the build this was read from; refusing", INTERP_LO);
+        if (!Read(exeBase + INTERP_LO, shape, 8) || !SameBytes(shape, INTERP_SHAPE))
+        { Detach(); return F("fatal: the interpreter at +0x{0:X} does not look like the build this was read from; refusing", INTERP_LO); }
         long ctx = Q(exeBase + CTX_GLOBAL);
-        long cs = ctx != 0 ? Q(ctx + CTX_CALLSTACK) : 0;
+        cs = ctx != 0 ? Q(ctx + CTX_CALLSTACK) : 0;
         if (cs == 0 || Q(cs + CS_OWNER) != ctx)
-            return string.Format("the script context at +0x{0:X} does not point at a call stack; refusing", CTX_GLOBAL);
-        o.AppendFormat("pid {0}, {1} at 0x{2:X}; interpreter and script context match the known build\n", pid, exeName, exeBase);
-
+        { Detach(); return F("the script context at +0x{0:X} does not point at a call stack yet (still loading?)", CTX_GLOBAL); }
+        say(F("pid {0}, {1} at 0x{2:X}; interpreter and script context match the known build", pid, exeName, exeBase));
         // the main thread: the one most often inside the exe during a short warm-up
         List<uint> tids = new List<uint>();
         foreach (ProcessThread t in proc.Threads) tids.Add((uint)t.Id);
@@ -345,190 +430,374 @@ public class DzScriptProfiler
             foreach (uint t in tids)
             {
                 long r = Rip(t, false);
-                if (r >= exeBase && r < exeBase + 0x1200000) { int v; warm.TryGetValue(t, out v); warm[t] = v + 1; }
+                if (r >= exeBase && r < exeHi) { int v; warm.TryGetValue(t, out v); warm[t] = v + 1; }
             }
             System.Threading.Thread.Sleep(5);
         }
-        uint mainTid = 0; int best = 0;
+        mainTid = 0; int best = 0;
         foreach (KeyValuePair<uint, int> kv in warm) if (kv.Value > best) { best = kv.Value; mainTid = kv.Key; }
         foreach (uint t in tids)
-            if (!warm.ContainsKey(t) && threads.ContainsKey(t) && threads[t] != IntPtr.Zero) { CloseHandle(threads[t]); threads[t] = IntPtr.Zero; }
-        if (mainTid == 0) return "no thread is executing inside the exe";
-        o.AppendFormat("main thread {0}; sampling {1:F0} s at {2:F0} Hz\n", mainTid, seconds, hz);
+            if (t != mainTid && threads.ContainsKey(t) && threads[t] != IntPtr.Zero) { CloseHandle(threads[t]); threads[t] = IntPtr.Zero; }
+        if (mainTid == 0) { Detach(); return "no thread is executing inside the exe (is the server still loading?)"; }
+        say("main thread " + mainTid);
+        vlo = exeBase + VM_LO; vhi = exeBase + VM_HI;
+        infos.Clear(); classMaps.Clear(); dbgs.Clear(); scriptFlag.Clear();
+        win = new Counters(); cum = new Counters(); run = null; hitchesWin.Clear();
+        return "";
+    }
+    void Detach()
+    {
+        foreach (KeyValuePair<uint, IntPtr> kv in threads) if (kv.Value != IntPtr.Zero) CloseHandle(kv.Value);
+        threads.Clear();
+        if (h != IntPtr.Zero) { CloseHandle(h); h = IntPtr.Zero; }
+    }
+    static bool SameBytes(byte[] a, byte[] b) { if (a.Length != b.Length) return false; for (int i = 0; i < a.Length; i++) if (a[i] != b[i]) return false; return true; }
 
-        long vlo = exeBase + VM_LO, vhi = exeBase + VM_HI;
-        Dictionary<long, int> selfCnt = new Dictionary<long, int>(), nativeCnt = new Dictionary<long, int>(),
-            inclCnt = new Dictionary<long, int>(), ownerCnt = new Dictionary<long, int>(), ownerNative = new Dictionary<long, int>();
-        Dictionary<long, Dictionary<long, int>> callers = new Dictionary<long, Dictionary<long, int>>();
-        List<KeyValuePair<int, long[]>> runs = new List<KeyValuePair<int, long[]>>();
-        long[] runStack = null; int runN = 0;
-        int total = 0, engine = 0, interp = 0, native = 0, vmEntry = 0;
-        byte[] frames = new byte[MAX_DEPTH * FRAME_SIZE];
-        double periodMs = 1000.0 / hz;
-        timeBeginPeriod(1);
-        napTimer = CreateWaitableTimerExW(IntPtr.Zero, IntPtr.Zero, 0x2 /* CREATE_WAITABLE_TIMER_HIGH_RESOLUTION */, 0x1F0003);
-        Stopwatch all = Stopwatch.StartNew();
-        Stopwatch one = new Stopwatch();
+    // ---- one sample ---------------------------------------------------------
+    void CloseRun()
+    {
+        Stretch r = run;
+        if (r == null) return;
+        r.Ms = (r.Last - r.First) + periodMs;
+        if (r.Ms >= minRunMs) hitchesWin.Add(r);
+        run = null;
+    }
+    bool Sample(Stopwatch clock)
+    {
+        double t0 = clock.Elapsed.TotalMilliseconds;
+        long rip = Rip(mainTid, true);
+        if (rip == -1) return false;
+        long rsp = lastRsp;
+        uint depth = 0; bool have = false;
         try
         {
-            while (all.Elapsed.TotalSeconds < seconds)
-            {
-                one.Restart();
-                long rip = Rip(mainTid, true);
-                long[] stack = null;
-                if (rip != -1)
-                {
-                    uint depth = 0; bool have = false;
-                    try
-                    {
-                        depth = U32(cs + CS_DEPTH);
-                        have = depth > 0 && depth <= MAX_DEPTH && Read(cs + CS_FRAMES + FRAME_SIZE, frames, (int)depth * FRAME_SIZE);
-                    }
-                    finally { Release(mainTid); }
-                    total++;
-                    bool inVm = rip >= vlo && rip < vhi;
-                    if (have)
-                    {
-                        List<long> fs = new List<long>();
-                        for (int i = 0; i < depth; i++) { long F = BitConverter.ToInt64(frames, i * FRAME_SIZE + 8); if (F != 0) fs.Add(F); }
-                        if (fs.Count > 0) stack = fs.ToArray();
-                    }
-                    if (stack != null)
-                    {
-                        long topF = stack[stack.Length - 1];
-                        Bump(selfCnt, topF);
-                        long owner = topF;
-                        for (int i = stack.Length - 1; i >= 0; i--) if (IsScript(stack[i])) { owner = stack[i]; break; }
-                        Bump(ownerCnt, owner);
-                        if (inVm) interp++;
-                        else { native++; Bump(nativeCnt, topF); Bump(ownerNative, owner); }
-                        HashSet<long> seen = new HashSet<long>(stack);
-                        foreach (long F in seen) Bump(inclCnt, F);
-                        Dictionary<long, int> c;
-                        if (!callers.TryGetValue(topF, out c)) { c = new Dictionary<long, int>(); callers[topF] = c; }
-                        Bump(c, stack.Length > 1 ? stack[stack.Length - 2] : 0);
-                    }
-                    else
-                    {
-                        engine++;
-                        if (inVm) vmEntry++;
-                    }
-                }
-                if (SameStack(stack, runStack)) runN++;
-                else
-                {
-                    if (runStack != null) runs.Add(new KeyValuePair<int, long[]>(runN, runStack));
-                    runStack = stack; runN = 1;
-                }
-                double left = periodMs - one.Elapsed.TotalMilliseconds;
-                if (left > 0.2) Nap(left);
-            }
+            depth = U32(cs + CS_DEPTH);
+            have = depth > 0 && depth <= MAX_DEPTH && Read(cs + CS_FRAMES + FRAME_SIZE, frames, (int)depth * FRAME_SIZE);
         }
-        finally { timeEndPeriod(1); if (napTimer != IntPtr.Zero) CloseHandle(napTimer); }
-        if (runStack != null) runs.Add(new KeyValuePair<int, long[]>(runN, runStack));
-        double secs = all.Elapsed.TotalSeconds;
+        finally { Release(mainTid); }
+        Counters w = win;
+        w.Total++;
+        bool inVm = rip >= vlo && rip < vhi;
+        bool inExe = rip >= exeBase && rip < exeHi;
+        long[] stack = null;
+        if (have)
+        {
+            List<long> fs = new List<long>();
+            for (int i = 0; i < depth; i++) { long Fd = BitConverter.ToInt64(frames, i * FRAME_SIZE + 8); if (Fd != 0) fs.Add(Fd); }
+            if (fs.Count > 0) stack = fs.ToArray();
+        }
+        string kind; long key, spot;
+        if (stack != null)
+        {
+            long top = stack[stack.Length - 1];
+            Bump(w.Self, top);
+            long owner = top;
+            for (int i = stack.Length - 1; i >= 0; i--) if (IsScript(stack[i])) { owner = stack[i]; break; }
+            Bump(w.Owner, owner);
+            if (inVm) w.Interp++;
+            else { w.NativeN++; Bump(w.Native, top); Bump(w.OwnerNative, owner); }
+            HashSet<long> seen = new HashSet<long>(stack);
+            foreach (long Fd in seen) Bump(w.Incl, Fd);
+            Dictionary<long, int> c;
+            if (!w.Callers.TryGetValue(top, out c)) { c = new Dictionary<long, int>(); w.Callers[top] = c; }
+            Bump(c, stack.Length > 1 ? stack[stack.Length - 2] : 0);
+            kind = "script"; key = stack[0]; spot = top;
+        }
+        else
+        {
+            w.Engine++;
+            if (inVm) w.VmEntry++;
+            if (inExe) { Bump(w.EngineOff, rip - exeBase); kind = "engine"; key = 0; spot = rip - exeBase; }
+            else { kind = ModuleOf(rip); Bump(w.EngineMod, kind, 1); key = 0; spot = ExeCaller(rsp); }
+        }
+        // A stretch is the main thread doing one thing without coming back to
+        // the frame loop; a long one is what a player feels as a freeze.
+        Stretch r = run;
+        if (r != null && r.Kind == kind && r.Key == key) { r.N++; r.Last = t0; }
+        else
+        {
+            CloseRun();
+            run = r = new Stretch(); r.Kind = kind; r.Key = key; r.N = 1; r.First = t0; r.Last = t0; r.At = DateTime.Now;
+        }
+        Bump(r.Spots, spot);
+        double left = periodMs - (clock.Elapsed.TotalMilliseconds - t0);
+        if (left > 0.2) Nap(left);
+        return true;
+    }
 
-        o.AppendLine();
-        o.AppendFormat("samples {0} over {1:F0} s ({2:F0}/s)\n", total, secs, total / Math.Max(1e-9, secs));
-        o.AppendFormat("  {0,5:F1}%  engine only, no script on the stack (of which {1:F1}% entering/leaving the VM)\n", Pct(engine, total), Pct(vmEntry, total));
-        o.AppendFormat("  {0,5:F1}%  interpreting script\n", Pct(interp, total));
-        o.AppendFormat("  {0,5:F1}%  engine natives called from script\n", Pct(native, total));
-
-        Dictionary<string, int> byMod = new Dictionary<string, int>(), byModNative = new Dictionary<string, int>();
-        foreach (KeyValuePair<long, int> kv in ownerCnt)
+    // ---- reports -------------------------------------------------------------
+    void ByMod(Counters c, out List<KeyValuePair<string, int>> mods, out Dictionary<string, int> modsNative)
+    {
+        Dictionary<string, int> m = new Dictionary<string, int>();
+        modsNative = new Dictionary<string, int>();
+        foreach (KeyValuePair<long, int> kv in c.Owner)
         {
             string mod = Get(kv.Key).Mod;
-            int v; byMod.TryGetValue(mod, out v); byMod[mod] = v + kv.Value;
-            int nv; ownerNative.TryGetValue(kv.Key, out nv);
-            int w; byModNative.TryGetValue(mod, out w); byModNative[mod] = w + nv;
+            Bump(m, mod, kv.Value);
+            int nv; c.OwnerNative.TryGetValue(kv.Key, out nv);
+            Bump(modsNative, mod, nv);
         }
-        List<KeyValuePair<string, int>> mods = new List<KeyValuePair<string, int>>(byMod);
-        mods.Sort(delegate (KeyValuePair<string, int> a, KeyValuePair<string, int> b) { return b.Value.CompareTo(a.Value); });
-        o.AppendLine();
-        o.AppendLine("script time by mod (the innermost script function's file; natives count for the script that called them):");
-        foreach (KeyValuePair<string, int> kv in mods)
-            o.AppendFormat("  {0,6:F2}%  {1,6}  {2,-24} ({3:F2}% of it in engine code)\n", Pct(kv.Value, total), kv.Value, kv.Key, Pct(byModNative[kv.Key], total));
-
-        o.AppendLine();
-        o.AppendLine("top functions on the script stack, self time:");
-        o.AppendFormat("  {0,7} {1,7} {2,7}  {3}\n", "self", "engine", "incl", "function  (mod  file:line)");
-        List<KeyValuePair<long, int>> selfSorted = Sorted(selfCnt);
+        mods = SortedS(m);
+    }
+    void WindowLines(string stamp, double seconds, List<Stretch> hitches, int threadsN, double cpuPct, out List<string> lines, out string row)
+    {
+        Counters w = win;
+        proc.Refresh();
+        double privMb = proc.PrivateMemorySize64 / 1048576.0, wsMb = proc.WorkingSet64 / 1048576.0;
+        int handles = proc.HandleCount;
+        double hitMs = 0, maxMs = 0;
+        foreach (Stretch r in hitches) { hitMs += r.Ms; if (r.Ms > maxMs) maxMs = r.Ms; }
+        List<KeyValuePair<string, int>> mods; Dictionary<string, int> modsNative;
+        ByMod(w, out mods, out modsNative);
+        lines = new List<string>();
+        lines.Add(F("{0}  window {1:F0} s  {2} samples | engine {3:F1}%  script {4:F1}%  natives {5:F1}% | hitches {6}, {7:F0} ms, max {8:F0} ms | private {9:F0} MB  ws {10:F0} MB  handles {11}  threads {12}  cpu {13:F0}%",
+            stamp, seconds, w.Total, w.Pct(w.Engine), w.Pct(w.Interp), w.Pct(w.NativeN), hitches.Count, hitMs, maxMs, privMb, wsMb, handles, threadsN, cpuPct));
+        List<string> mt = new List<string>(), mc = new List<string>();
+        for (int i = 0; i < mods.Count && i < 6; i++) { mt.Add(F("{0} {1:F1}%", mods[i].Key, w.Pct(mods[i].Value))); mc.Add(F("{0}={1:F1}", mods[i].Key, w.Pct(mods[i].Value))); }
+        List<KeyValuePair<long, int>> tops = Sorted(w.Self);
+        List<string> tt = new List<string>(), tc = new List<string>();
+        for (int i = 0; i < tops.Count && i < 8; i++) { tt.Add(F("{0} {1:F1}%", Get(tops[i].Key).Name, w.Pct(tops[i].Value))); if (i < 5) tc.Add(F("{0}={1:F1}", Get(tops[i].Key).Name, w.Pct(tops[i].Value))); }
+        lines.Add("   mods: " + (mt.Count > 0 ? string.Join("  ", mt.ToArray()) : "-"));
+        lines.Add("   top:  " + (tt.Count > 0 ? string.Join(" | ", tt.ToArray()) : "-"));
+        List<Stretch> hs = new List<Stretch>(hitches);
+        hs.Sort(delegate (Stretch a, Stretch b) { return b.Ms.CompareTo(a.Ms); });
+        for (int i = 0; i < hs.Count && i < 10; i++) lines.Add(F("   hitch {0}  {1,6:F0} ms  {2}", hs[i].At.ToString("HH:mm:ss", Inv), hs[i].Ms, Describe(hs[i])));
+        row = string.Join(",", new string[] { stamp, w.Total.ToString(), F("{0:F1}", w.Pct(w.Engine)), F("{0:F1}", w.Pct(w.Interp)), F("{0:F1}", w.Pct(w.NativeN)),
+            hitches.Count.ToString(), F("{0:F0}", hitMs), F("{0:F0}", maxMs), F("{0:F0}", privMb), F("{0:F0}", wsMb), handles.ToString(), threadsN.ToString(), F("{0:F0}", cpuPct),
+            Csv(string.Join(";", mc.ToArray())), Csv(string.Join(";", tc.ToArray())) });
+    }
+    List<Stretch> RotateWindow()
+    {
+        cum.Add(win);
+        win = new Counters();
+        List<Stretch> hs = hitchesWin;
+        hitchesWin = new List<Stretch>();
+        return hs;
+    }
+    List<string> ReportLines(Counters c, int top, List<Stretch> allHitches)
+    {
+        List<string> o = new List<string>();
+        o.Add("samples " + c.Total);
+        o.Add(F("  {0,5:F1}%  engine only, no script on the stack (of which {1:F1}% entering/leaving the VM)", c.Pct(c.Engine), c.Pct(c.VmEntry)));
+        o.Add(F("  {0,5:F1}%  interpreting script", c.Pct(c.Interp)));
+        o.Add(F("  {0,5:F1}%  engine natives called from script", c.Pct(c.NativeN)));
+        List<KeyValuePair<string, int>> mods; Dictionary<string, int> modsNative;
+        ByMod(c, out mods, out modsNative);
+        o.Add("");
+        o.Add("script time by mod (the innermost script function's file; natives count for the script that called them):");
+        foreach (KeyValuePair<string, int> kv in mods) o.Add(F("  {0,6:F2}%  {1,6}  {2,-24} ({3:F2}% of it in engine code)", c.Pct(kv.Value), kv.Value, kv.Key, c.Pct(modsNative[kv.Key])));
+        o.Add("");
+        o.Add("top functions on the script stack, self time:");
+        o.Add(F("  {0,7} {1,7} {2,7}  {3}", "self", "engine", "incl", "function  (mod  file:line)"));
+        List<KeyValuePair<long, int>> selfSorted = Sorted(c.Self);
         for (int i = 0; i < selfSorted.Count && i < top; i++)
         {
-            long F = selfSorted[i].Key; int nv, iv;
-            nativeCnt.TryGetValue(F, out nv); inclCnt.TryGetValue(F, out iv);
-            o.AppendFormat("  {0,6:F2}% {1,6:F2}% {2,6:F2}%  {3}  ({4})\n", Pct(selfSorted[i].Value, total), Pct(nv, total), Pct(iv, total), Get(F).Name, Where(F));
+            long Fd = selfSorted[i].Key; int nv, iv;
+            c.Native.TryGetValue(Fd, out nv); c.Incl.TryGetValue(Fd, out iv);
+            o.Add(F("  {0,6:F2}% {1,6:F2}% {2,6:F2}%  {3}  ({4})", c.Pct(selfSorted[i].Value), c.Pct(nv), c.Pct(iv), Get(Fd).Name, Where(Fd)));
         }
-
-        o.AppendLine();
-        o.AppendLine("top script functions, inclusive (anywhere on the stack):");
-        List<KeyValuePair<long, int>> inclSorted = Sorted(inclCnt);
-        for (int i = 0; i < inclSorted.Count && i < top; i++)
-            o.AppendFormat("  {0,6:F2}%  {1}  ({2})\n", Pct(inclSorted[i].Value, total), Get(inclSorted[i].Key).Name, Get(inclSorted[i].Key).Mod);
-
-        o.AppendLine();
-        o.AppendLine("who calls the hottest functions:");
+        o.Add("");
+        o.Add("top script functions, inclusive (anywhere on the stack):");
+        List<KeyValuePair<long, int>> inclSorted = Sorted(c.Incl);
+        for (int i = 0; i < inclSorted.Count && i < top; i++) o.Add(F("  {0,6:F2}%  {1}  ({2})", c.Pct(inclSorted[i].Value), Get(inclSorted[i].Key).Name, Get(inclSorted[i].Key).Mod));
+        o.Add("");
+        o.Add("who calls the hottest functions:");
         for (int i = 0; i < selfSorted.Count && i < 10; i++)
         {
-            long F = selfSorted[i].Key;
+            long Fd = selfSorted[i].Key;
             List<string> parts = new List<string>();
-            Dictionary<long, int> c;
-            if (callers.TryGetValue(F, out c))
+            Dictionary<long, int> cc;
+            if (c.Callers.TryGetValue(Fd, out cc))
             {
-                List<KeyValuePair<long, int>> cs2 = Sorted(c);
-                for (int j = 0; j < cs2.Count && j < 3; j++)
-                    parts.Add(string.Format("{0} {1:F0}%", cs2[j].Key == 0 ? "<engine>" : Get(cs2[j].Key).Name, 100.0 * cs2[j].Value / selfSorted[i].Value));
+                List<KeyValuePair<long, int>> cs2 = Sorted(cc);
+                for (int j = 0; j < cs2.Count && j < 3; j++) parts.Add(F("{0} {1:F0}%", cs2[j].Key == 0 ? "<engine>" : Get(cs2[j].Key).Name, 100.0 * cs2[j].Value / selfSorted[i].Value));
             }
-            o.AppendFormat("  {0,-48} <- {1}\n", Get(F).Name, string.Join("; ", parts.ToArray()));
+            o.Add(F("  {0,-48} <- {1}", Get(Fd).Name, string.Join("; ", parts.ToArray())));
         }
-
-        List<KeyValuePair<int, long[]>> longRuns = new List<KeyValuePair<int, long[]>>();
-        foreach (KeyValuePair<int, long[]> r in runs) if (r.Key * periodMs >= minRunMs) longRuns.Add(r);
-        longRuns.Sort(delegate (KeyValuePair<int, long[]> a, KeyValuePair<int, long[]> b) { return b.Key.CompareTo(a.Key); });
-        o.AppendLine();
-        if (longRuns.Count > 0)
+        o.Add("");
+        if (allHitches.Count > 0)
         {
-            o.AppendFormat("stretches where the script stack did not change for >= {0:F0} ms (a stall looks like this):\n", minRunMs);
-            for (int i = 0; i < longRuns.Count && i < 10; i++)
-            {
-                long[] st = longRuns[i].Value;
-                List<string> chain = new List<string>();
-                for (int j = Math.Max(0, st.Length - 4); j < st.Length; j++) chain.Add(Get(st[j]).Name);
-                o.AppendFormat("  {0,7:F0} ms  {1}\n", longRuns[i].Key * periodMs, string.Join(" > ", chain.ToArray()));
-            }
+            double tot = 0; foreach (Stretch r in allHitches) tot += r.Ms;
+            o.Add(F("stretches >= {0:F0} ms where the main thread stayed in one piece of work (what a player feels as a freeze): {1}, {2:F0} ms in all", minRunMs, allHitches.Count, tot));
+            List<Stretch> hs = new List<Stretch>(allHitches);
+            hs.Sort(delegate (Stretch a, Stretch b) { return b.Ms.CompareTo(a.Ms); });
+            for (int i = 0; i < hs.Count && i < 15; i++) o.Add(F("  {0}  {1,7:F0} ms  {2}", hs[i].At.ToString("HH:mm:ss", Inv), hs[i].Ms, Describe(hs[i])));
+            o.Add("  (engine addresses are named by resolve-samples.py against the same exe)");
         }
-        else o.AppendFormat("no stretch >= {0:F0} ms with an unchanged script stack\n", minRunMs);
-
-        if (!string.IsNullOrEmpty(outCsv))
+        else o.Add(F("no stretch >= {0:F0} ms in one piece of work: nothing here would be felt as a freeze", minRunMs));
+        int engineOnly = 0;
+        foreach (KeyValuePair<long, int> kv in c.EngineOff) engineOnly += kv.Value;
+        foreach (KeyValuePair<string, int> kv in c.EngineMod) engineOnly += kv.Value;
+        if (engineOnly > 0)
         {
-            using (StreamWriter w = new StreamWriter(outCsv, false, new UTF8Encoding(false)))
-            {
-                w.WriteLine(string.Format("# pid {0} samples {1} seconds {2:F0} hz {3:F0} engine {4} interp {5} native {6}", pid, total, secs, hz, engine, interp, native));
-                w.WriteLine("function,mod,file,line,self,engine,inclusive,owner");
-                foreach (KeyValuePair<long, int> kv in inclSorted)
-                {
-                    Info inf = Get(kv.Key); int sv, nv, ov;
-                    selfCnt.TryGetValue(kv.Key, out sv); nativeCnt.TryGetValue(kv.Key, out nv); ownerCnt.TryGetValue(kv.Key, out ov);
-                    w.WriteLine(string.Join(",", new string[] { Csv(inf.Name), Csv(inf.Mod), Csv(inf.File == null ? "" : inf.File.Replace('\\', '/')),
-                        inf.Line.ToString(), sv.ToString(), nv.ToString(), kv.Value.ToString(), ov.ToString() }));
-                }
-            }
-            o.AppendLine();
-            o.AppendLine("written: " + outCsv);
+            o.Add("");
+            o.Add(F("engine time with no script on the stack ({0:F1}%), by place:", c.Pct(engineOnly)));
+            List<KeyValuePair<string, int>> em = SortedS(c.EngineMod);
+            for (int i = 0; i < em.Count && i < 4; i++) o.Add(F("  {0,6:F2}%  [module] {1}", c.Pct(em[i].Value), em[i].Key));
+            List<KeyValuePair<long, int>> eo = Sorted(c.EngineOff);
+            for (int i = 0; i < eo.Count && i < 8; i++) o.Add(F("  {0,6:F2}%  +0x{1:X}", c.Pct(eo[i].Value), eo[i].Key));
         }
-        foreach (KeyValuePair<uint, IntPtr> kv in threads) if (kv.Value != IntPtr.Zero) CloseHandle(kv.Value);
-        CloseHandle(h);
-        Marshal.FreeHGlobal(ctxRaw);
-        return o.ToString();
+        return o;
     }
-    static double Pct(int n, int total) { return 100.0 * n / Math.Max(1, total); }
-    static bool StructuralEq(byte[] a, byte[] b) { if (a.Length != b.Length) return false; for (int i = 0; i < a.Length; i++) if (a[i] != b[i]) return false; return true; }
-    static bool SameStack(long[] a, long[] b)
+    void WriteCsvs(string prefix, Counters c, int seg, List<Stretch> allHitches)
     {
-        if (a == null || b == null) return a == null && b == null;
-        if (a.Length != b.Length) return false;
-        for (int i = 0; i < a.Length; i++) if (a[i] != b[i]) return false;
-        return true;
+        List<Stretch> hs = new List<Stretch>(allHitches);
+        hs.Sort(delegate (Stretch a, Stretch b) { return b.Ms.CompareTo(a.Ms); });
+        using (StreamWriter w = new StreamWriter(prefix + ".functions.csv", false, new UTF8Encoding(false)))
+        {
+            w.WriteLine(F("# pid {0} segment {1} samples {2} engine {3} interp {4} native {5}", pid, seg, c.Total, c.Engine, c.Interp, c.NativeN));
+            for (int i = 0; i < hs.Count && i < 40; i++) w.WriteLine(F("# hitch {0} {1:F0} ms: {2}", hs[i].At.ToString("HH:mm:ss", Inv), hs[i].Ms, Describe(hs[i])));
+            w.WriteLine("function,mod,file,line,self,engine,inclusive,owner");
+            foreach (KeyValuePair<long, int> kv in Sorted(c.Incl))
+            {
+                Info inf = Get(kv.Key); int sv, nv, ov;
+                c.Self.TryGetValue(kv.Key, out sv); c.Native.TryGetValue(kv.Key, out nv); c.Owner.TryGetValue(kv.Key, out ov);
+                w.WriteLine(string.Join(",", new string[] { Csv(inf.Name), Csv(inf.Mod), Csv(inf.File == null ? "" : inf.File.Replace('\\', '/')),
+                    inf.Line.ToString(), sv.ToString(), nv.ToString(), kv.Value.ToString(), ov.ToString() }));
+            }
+        }
+        using (StreamWriter w = new StreamWriter(prefix + ".engine.csv", false, new UTF8Encoding(false)))
+        {
+            // the collect-samples.ps1 format, so resolve-samples.py names these
+            w.WriteLine("# dayz script-profile, engine-only samples of the main thread");
+            w.WriteLine(F("# exe_base=0x{0:X} pid={1} segment={2} samples={3}", exeBase, pid, seg, c.Total));
+            w.WriteLine("tid,kind,where,count");
+            foreach (KeyValuePair<long, int> kv in Sorted(c.EngineOff)) w.WriteLine(F("{0},exe,{1:X},{2}", mainTid, kv.Key, kv.Value));
+            foreach (KeyValuePair<string, int> kv in SortedS(c.EngineMod)) w.WriteLine(F("{0},module,{1},{2}", mainTid, kv.Key, kv.Value));
+        }
+    }
+
+    // ---- files -----------------------------------------------------------------
+    static void Append(string path, string text) { File.AppendAllText(path, text + "\n", new UTF8Encoding(false)); }
+    static void EnsureHeader(string path, string header) { if (!File.Exists(path)) File.WriteAllText(path, header + "\n", new UTF8Encoding(false)); }
+
+    // ---- the runs -----------------------------------------------------------
+    static int FindPid(string exeName)
+    {
+        string bare = exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? exeName.Substring(0, exeName.Length - 4) : exeName;
+        Process[] ps = Process.GetProcessesByName(bare);
+        if (ps.Length == 0) return 0;
+        // a Diag client uses the same exe name as its server; the server has no window
+        foreach (Process p in ps) { try { if (p.MainWindowHandle == IntPtr.Zero) return p.Id; } catch (Exception) { } }
+        return ps[0].Id;
+    }
+
+    // Returns "fatal", "retry", "exited" or "done".
+    string RunSegment(int wantPid, string exeName, int seg, DateTime deadline, double windowSec, int top, string prefix, bool shortMode)
+    {
+        Action<string> say = delegate (string t) { if (prefix != null) Append(prefix + ".log", t); Console.WriteLine(t); };
+        string err = Attach(wantPid, exeName, say);
+        if (err != "") { say(err); return err.StartsWith("fatal") ? "fatal" : "retry"; }
+        List<Stretch> all = new List<Stretch>();
+        Stopwatch clock = Stopwatch.StartNew();
+        TimeSpan cpu0 = proc.TotalProcessorTime;
+        DateTime wall0 = DateTime.Now, nextFlush = wall0.AddSeconds(windowSec);
+        bool exited = false;
+        while (DateTime.Now < deadline && !stopRequested)
+        {
+            if (!Sample(clock))
+            {
+                if (!Alive()) { exited = true; break; }
+                System.Threading.Thread.Sleep(50);
+            }
+            if (win.Total % 400 == 0 && !Alive()) { exited = true; break; }
+            if (DateTime.Now >= nextFlush)
+            {
+                CloseRun();
+                List<Stretch> hit = hitchesWin;
+                DateTime wall = DateTime.Now;
+                TimeSpan cpu = TimeSpan.Zero;
+                int threadsN = 0;
+                try { proc.Refresh(); cpu = proc.TotalProcessorTime; threadsN = proc.Threads.Count; } catch (Exception) { }
+                double cpuPct = 100.0 * (cpu - cpu0).TotalSeconds / Math.Max(1e-9, (wall - wall0).TotalSeconds);
+                string stamp = Stamp();
+                List<string> lines; string row;
+                WindowLines(stamp, (wall - wall0).TotalSeconds, hit, threadsN, cpuPct, out lines, out row);
+                if (prefix != null)
+                {
+                    Append(prefix + ".log", string.Join("\n", lines.ToArray()));
+                    Append(prefix + ".windows.csv", stamp + "," + seg + "," + pid + "," + row.Substring(row.IndexOf(',') + 1));
+                    foreach (Stretch r in hit) Append(prefix + ".hitches.csv", string.Join(",", new string[] { r.At.ToString("yyyy-MM-dd HH:mm:ss", Inv), seg.ToString(), pid.ToString(), F("{0:F0}", r.Ms), r.Kind, Csv(Describe(r)) }));
+                    Console.WriteLine(lines[0]);
+                }
+                all.AddRange(RotateWindow());
+                if (prefix != null) WriteCsvs(prefix, cum, seg, all);
+                cpu0 = cpu; wall0 = wall; nextFlush = wall.AddSeconds(windowSec);
+            }
+        }
+        CloseRun();
+        all.AddRange(RotateWindow());
+        List<string> report = ReportLines(cum, top, all);
+        if (prefix != null)
+        {
+            Append(prefix + ".log", "");
+            Append(prefix + ".log", F("==== segment {0}, pid {1}: {2} ====", seg, pid, exited ? "the server exited" : "end of run"));
+            Append(prefix + ".log", string.Join("\n", report.ToArray()));
+            WriteCsvs(prefix, cum, seg, all);
+            Console.WriteLine("segment " + seg + " written to " + prefix + ".*");
+        }
+        else
+        {
+            Console.WriteLine();
+            Console.WriteLine(string.Join("\n", report.ToArray()));
+        }
+        Detach();
+        if (stopRequested) return "done";
+        return exited ? "exited" : "done";
+    }
+
+    public static int Run(string exeName, int wantPid, double seconds, double hours, double windowSec, double hz, int top, double minRunMs, string prefix)
+    {
+        DzScriptProfiler p = new DzScriptProfiler();
+        p.periodMs = 1000.0 / hz;
+        p.minRunMs = minRunMs;
+        bool shortMode = seconds > 0;
+        if (shortMode) prefix = null;
+        Console.CancelKeyPress += delegate (object s, ConsoleCancelEventArgs e) { e.Cancel = true; stopRequested = true; };
+        timeBeginPeriod(1);
+        p.napTimer = CreateWaitableTimerExW(IntPtr.Zero, IntPtr.Zero, 0x2 /* CREATE_WAITABLE_TIMER_HIGH_RESOLUTION */, 0x1F0003);
+        try
+        {
+            if (prefix != null)
+            {
+                EnsureHeader(prefix + ".windows.csv", "time,segment,pid,samples,engine_pct,interp_pct,native_pct,hitches,hitch_ms,max_hitch_ms,private_mb,ws_mb,handles,threads,cpu_pct,mods,top");
+                EnsureHeader(prefix + ".hitches.csv", "time,segment,pid,ms,kind,description");
+                Append(prefix + ".log", F("==== script-profile monitor started {0}: {1:F1} h, {2:F0} s windows, {3:F0} Hz, hitch threshold {4:F0} ms ====", Stamp(), hours, windowSec, hz, minRunMs));
+                Console.WriteLine(F("monitoring {0} for {1:F1} h; files: {2}.log / .windows.csv / .hitches.csv / .functions.csv / .engine.csv", exeName, hours, prefix));
+                Console.WriteLine("close this window to stop; nothing is lost but the current minute");
+            }
+            DateTime deadline = DateTime.Now.AddSeconds(shortMode ? seconds : hours * 3600.0);
+            double window = shortMode ? Math.Max(1.0, seconds) : windowSec;
+            int seg = 0;
+            bool waiting = false;
+            while (DateTime.Now < deadline && !stopRequested)
+            {
+                int pid = (wantPid != 0 && seg == 0) ? wantPid : FindPid(exeName);
+                if (pid == 0)
+                {
+                    if (shortMode) { Console.WriteLine("no " + exeName + " running"); return 1; }
+                    if (!waiting) { Append(prefix + ".log", Stamp() + "  waiting for " + exeName + " to start"); Console.WriteLine("waiting for " + exeName + " ..."); waiting = true; }
+                    System.Threading.Thread.Sleep(10000);
+                    continue;
+                }
+                waiting = false;
+                string rc = p.RunSegment(pid, exeName, seg + 1, deadline, window, top, prefix, shortMode);
+                if (rc == "fatal" || (shortMode && rc != "done")) return 1;
+                if (rc == "done") return 0;
+                if (rc == "retry") { System.Threading.Thread.Sleep(10000); continue; }
+                seg++;
+                Append(prefix + ".log", Stamp() + "  the server (pid " + pid + ") is gone; waiting for the next one");
+                Console.WriteLine("server pid " + pid + " gone; waiting for the next one ...");
+                System.Threading.Thread.Sleep(15000);
+            }
+            return 0;
+        }
+        finally
+        {
+            timeEndPeriod(1);
+            if (p.napTimer != IntPtr.Zero) CloseHandle(p.napTimer);
+            if (p.ctxRaw != IntPtr.Zero) Marshal.FreeHGlobal(p.ctxRaw);
+        }
     }
 }
 '@
@@ -537,16 +806,8 @@ if (-not ("DzScriptProfiler" -as [type])) {
     Add-Type -TypeDefinition $src -Language CSharp
 }
 
-if ($ProcessIdToSample -eq 0) {
-    $procs = @(Get-CimInstance Win32_Process -Filter "Name='$Exe'" -ErrorAction SilentlyContinue)
-    if ($procs.Count -eq 0) {
-        Write-Host "no $Exe running"
-        exit 1
-    }
-    # the server started with -server first (a diag client uses the same exe name)
-    $pick = $procs | Sort-Object { if ($_.CommandLine -match '-server') { 0 } else { 1 } } | Select-Object -First 1
-    $ProcessIdToSample = [int]$pick.ProcessId
+if ($Seconds -le 0 -and $Out -eq "") {
+    $Out = Join-Path (Split-Path -Parent $PSCommandPath) ("script-profile-" + (Get-Date -Format "yyyyMMdd-HHmm"))
 }
-
-$report = [DzScriptProfiler]::Run($ProcessIdToSample, $Exe, $Seconds, $Hz, $Top, $MinRunMs, $Out)
-Write-Host $report
+$rc = [DzScriptProfiler]::Run($Exe, $ProcessIdToSample, $Seconds, $Hours, $Window, $Hz, $Top, $MinRunMs, $Out)
+exit $rc

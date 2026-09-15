@@ -17,7 +17,7 @@ which is a measurement, not a theory.
 
 | file | runs where | needs |
 |---|---|---|
-| `script-profile.ps1` | the machine running the server | nothing (Windows PowerShell) |
+| `script-profile.ps1` + `profile-server.bat` | the machine running the server | nothing (Windows PowerShell) |
 | `script-profile.py` | the machine running the server | Python 3, standard library only |
 | `collect-samples.ps1` | the machine running the server | nothing (Windows PowerShell) |
 | `collect-memory.ps1` | the machine running the server | nothing (Windows PowerShell) |
@@ -39,15 +39,36 @@ Two profilers, two questions:
 
 ## Script profiler
 
-On the server's machine, from an elevated PowerShell, while the problem is
-happening:
+### As a monitor, for a problem nobody can be at the keyboard for
+
+Copy `script-profile.ps1` and `profile-server.bat` to the server's machine and
+double-click the `.bat` (it asks for elevation, because the server runs
+elevated). It watches `DayZServer_x64.exe` for 24 hours, survives the server's
+restarts, and writes next to itself:
+
+| file | what |
+|---|---|
+| `script-profile-<date>.log` | one block per minute: the engine/script split, time per mod, the top functions, every freeze with its time; a full report at the end of each server run |
+| `…windows.csv` | the same minute by minute as numbers: memory, handles, threads, CPU, hitches, top functions |
+| `…hitches.csv` | every stretch where the main thread stayed in one piece of work for 150 ms or more, with the time, the function it was in or the engine address |
+| `…functions.csv` | every function's counts for the current server run, rewritten each minute |
+| `…engine.csv` | engine-only samples in `collect-samples` format, so `resolve-samples.py` names them |
+
+Closing the window at any moment loses at most the current minute. Ask for
+the whole folder back; the `.log` alone already answers "was the server
+freezing, when, and in whose code".
+
+### On the spot
+
+From an elevated PowerShell, while the problem is happening:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File script-profile.ps1 -Seconds 60 -Out lag-script.csv
+powershell -ExecutionPolicy Bypass -File script-profile.ps1 -Seconds 60 -Out lag-script
 ```
 
-or, where Python 3 exists, `python script-profile.py --seconds 60 --out lag-script.csv`
-(same output; the `.ps1` is a port for machines without Python). Then the same
+or, where Python 3 exists, `python script-profile.py --seconds 60 --out lag-script`
+(same output; the `.ps1` is a port for machines without Python, and
+`python script-profile.py --hours 24` is the same monitor). Then the same
 once more in a calm state, for the comparison. The report has:
 
 - the split of the main thread into *engine only*, *interpreting script*, and
@@ -58,9 +79,12 @@ once more in a calm state, for the comparison. The report has:
   `vanilla`, `JM/CF`, `VPPAdminTools`, `OpenZone_Radio`, ...;
 - the hottest functions, self and inclusive, with file and line;
 - who calls the hottest ones;
-- **stretches where the script stack did not change** for 100 ms or more. A
-  frame loop normally changes its stack hundreds of times a second; one stack
-  standing for half a second *is* a stall, and the report names it.
+- **stretches where the main thread stayed in one piece of work** for 150 ms
+  or more: script entered from one root function, engine code with no script
+  on the stack, or a system call that did not return. A frame loop comes back
+  to its top many times a second; one piece of work lasting a second *is* the
+  freeze players feel, and the report names it — the script function, or the
+  engine address for `resolve-samples.py`.
 
 The profiler reads the process and never writes to it. Its offsets are for one
 build of `DayZServer_x64.exe` (2026-08-13, 16,965,176 bytes); it checks two of
