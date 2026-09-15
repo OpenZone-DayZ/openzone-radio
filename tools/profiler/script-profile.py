@@ -3,22 +3,27 @@
 Samples the server's main thread and, on every sample, reads the Enforce VM's
 own call stack. Each sample therefore says which script function was running,
 in which mod's file, and whether the time went into interpreting script or
-into an engine native that the script called. No debug build, no EnProfiler,
-no mod change: the process is only read, never written.
+into an engine native that the script called. Every other thread of the
+process is sampled too (at a lower rate, addresses only), so a freeze that
+does not live on the main thread -- a stuck network thread, say -- still
+shows up, by thread, with the address it stood at and the CPU it used. No
+debug build, no EnProfiler, no mod change: the process is only read, never
+written.
 
 Two ways to run it:
 
-    python script-profile.py --seconds 60 --out lag-script.csv
+    python script-profile.py --seconds 60 --out lag-script
         one window, the report on the screen: for a problem that is
         happening right now.
 
     python script-profile.py --hours 24
         a monitor, for a problem nobody can be at the keyboard for. Every
         minute it appends one window to <out>.log and <out>.windows.csv,
-        every freeze of the main thread to <out>.hitches.csv, and rewrites
-        the cumulative <out>.functions.csv and <out>.engine.csv. When the
-        server restarts it waits for the new process and carries on. Closing
-        it at any moment loses at most the current minute.
+        every thread's minute to <out>.threads.csv, every freeze of the main
+        thread to <out>.hitches.csv, and rewrites the cumulative
+        <out>.functions.csv and <out>.engine.csv. When the server restarts
+        it waits for the new process and carries on. Closing it at any
+        moment loses at most the current minute.
 
 Only Python 3 is needed (ctypes from the standard library). The structures
 below were read from DayZServer_x64.exe of 2026-08-13 (16,965,176 bytes); the
@@ -51,6 +56,12 @@ import time
 
 k32 = ctypes.WinDLL("kernel32", use_last_error=True)
 psapi = ctypes.WinDLL("psapi", use_last_error=True)
+try:
+    _GetThreadDescription = k32.GetThreadDescription      # Windows 10 1607+
+    _GetThreadDescription.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_wchar_p)]
+    _GetThreadDescription.restype = ctypes.c_long
+except AttributeError:
+    _GetThreadDescription = None
 
 TH32CS_SNAPPROCESS = 0x2
 TH32CS_SNAPTHREAD = 0x4
@@ -129,6 +140,10 @@ class PROCESS_MEMORY_COUNTERS_EX(ctypes.Structure):
                 ("PrivateUsage", ctypes.c_size_t)]
 
 
+def _secs(f):
+    return ((f.dwHighDateTime << 32) | f.dwLowDateTime) / 1e7
+
+
 def processes_named(name):
     """pids of every process running `name`, from the process snapshot."""
     snap = k32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
@@ -181,6 +196,13 @@ def modules_of(pid):
     return out
 
 
+def exe_base(pid, name):
+    for base, size, mod in modules_of(pid):
+        if mod.lower() == name.lower():
+            return base
+    return None
+
+
 def threads_of(pid):
     snap = k32.CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0)
     te = THREADENTRY32()
@@ -219,12 +241,8 @@ class Proc:
         k32.GetProcessHandleCount(self.h, ctypes.byref(hc))
         ft = [wt.FILETIME() for _ in range(4)]
         k32.GetProcessTimes(self.h, *[ctypes.byref(f) for f in ft])
-
-        def secs(f):
-            return ((f.dwHighDateTime << 32) | f.dwLowDateTime) / 1e7
-
         return {"private_mb": pm.PrivateUsage / 1048576.0, "ws_mb": pm.WorkingSetSize / 1048576.0,
-                "handles": hc.value, "cpu_s": secs(ft[2]) + secs(ft[3])}
+                "handles": hc.value, "cpu_s": _secs(ft[2]) + _secs(ft[3])}
 
     def read(self, addr, n):
         """Up to the shared buffer's size; readn() for anything larger."""
@@ -267,6 +285,11 @@ class Proc:
             self.handles[tid] = h
         return h
 
+    def drop_thread(self, tid):
+        h = self.handles.pop(tid, None)
+        if h:
+            k32.CloseHandle(h)
+
     def rip(self, tid, hold=False):
         """The thread's rip. With hold=True the thread stays suspended so the
         VM's call stack can be read consistently; call release() afterwards.
@@ -291,6 +314,28 @@ class Proc:
         h = self.handles.get(tid)
         if h:
             k32.ResumeThread(h)
+
+    def thread_cpu(self, tid):
+        """Kernel plus user seconds of a thread, or None."""
+        h = self.thread(tid)
+        if not h:
+            return None
+        ft = [wt.FILETIME() for _ in range(4)]
+        if not k32.GetThreadTimes(h, *[ctypes.byref(f) for f in ft]):
+            return None
+        return _secs(ft[2]) + _secs(ft[3])
+
+    def thread_name(self, tid):
+        """The description a thread was given, if any (the engine names few)."""
+        h = self.thread(tid)
+        if not h or not _GetThreadDescription:
+            return ""
+        s = ctypes.c_wchar_p()
+        if _GetThreadDescription(h, ctypes.byref(s)) < 0 or not s.value:
+            return ""
+        name = s.value
+        k32.LocalFree(s)
+        return name
 
     def close(self):
         for h in self.handles.values():
@@ -445,18 +490,45 @@ class Counters:
         return 100.0 * n / max(1, self.total)
 
 
+class OtherThread:
+    """What is known about one non-main thread: where it was, and the longest
+    time it stood at one exe address (a spin, a lock, one long call)."""
+
+    def __init__(self):
+        self.n = 0
+        self.exe = 0
+        self.offs = collections.Counter()
+        self.mods = collections.Counter()
+        self.stall_rip = None
+        self.stall_first = 0.0
+        self.stall_ms = 0.0
+        self.stall_at_rip = 0
+        self.stall_at = 0.0
+
+    def add(self, o):
+        self.n += o.n
+        self.exe += o.exe
+        self.offs.update(o.offs)
+        self.mods.update(o.mods)
+        if o.stall_ms > self.stall_ms:
+            self.stall_ms, self.stall_at_rip, self.stall_at = o.stall_ms, o.stall_at_rip, o.stall_at
+
+
 class Sampler:
     """One server process: samples, window and cumulative counters, and the
     stretches of uninterrupted work that a player feels as a freeze."""
 
-    def __init__(self, p, base, exe_size, mods, cs, main_tid, hz, min_run_ms):
+    def __init__(self, p, pid, base, exe_size, mods, cs, main_tid, hz, threads_hz, min_run_ms):
         self.p = p
+        self.pid = pid
         self.base = base
         self.exe_hi = base + exe_size
         self.mods = mods
         self.cs = cs
         self.main_tid = main_tid
         self.period = 1.0 / hz
+        self.every = int(round(hz / threads_hz)) if threads_hz > 0 else 0
+        self.tick = 0
         self.min_run_ms = min_run_ms
         self.vlo, self.vhi = base + VM_LO, base + VM_HI
         self.names = Names(p)
@@ -465,6 +537,26 @@ class Sampler:
         self.script_flag = {}
         self.run = None
         self.hitches_win = []
+        self.others = {}          # tid -> OtherThread, this window
+        self.others_cum = {}      # tid -> OtherThread, the whole segment
+        self.cpu_prev = {}
+        self.thread_names = {}
+        self.refresh_threads()
+
+    def refresh_threads(self):
+        """The other threads come and go; keep the set current once a window."""
+        now = set(threads_of(self.pid))
+        now.discard(self.main_tid)
+        for tid in list(self.others):
+            if tid not in now:
+                del self.others[tid]
+                self.p.drop_thread(tid)
+                self.cpu_prev.pop(tid, None)
+        for tid in now:
+            if tid not in self.others:
+                self.others[tid] = OtherThread()
+                self.thread_names[tid] = self.p.thread_name(tid)
+                self.cpu_prev[tid] = self.p.thread_cpu(tid)
 
     def module_of(self, addr):
         for b, s, n in self.mods:
@@ -499,8 +591,29 @@ class Sampler:
             self.hitches_win.append(r)
         self.run = None
 
+    def sample_others(self, t0):
+        p = self.p
+        for tid, o in self.others.items():
+            rip = p.rip(tid)
+            if rip is None:
+                continue
+            o.n += 1
+            if self.base <= rip < self.exe_hi:
+                off = rip - self.base
+                o.exe += 1
+                o.offs[off] += 1
+                if o.stall_rip == off:
+                    ms = (t0 - o.stall_first + self.period * self.every) * 1000.0
+                    if ms > o.stall_ms:
+                        o.stall_ms, o.stall_at_rip = ms, off
+                else:
+                    o.stall_rip, o.stall_first, o.stall_at = off, t0, time.time()
+            else:
+                o.mods[self.module_of(rip)] += 1
+                o.stall_rip = None
+
     def sample(self):
-        """One sample. False when the thread could not be read (process gone)."""
+        """One sample. False when the main thread could not be read (process gone)."""
         p = self.p
         t0 = time.perf_counter()
         rip = p.rip(self.main_tid, hold=True)
@@ -562,6 +675,9 @@ class Sampler:
             self.run = r = {"kind": kind, "key": key, "n": 1, "first": t0, "last": t0,
                             "at": time.time(), "spots": collections.Counter()}
         r["spots"][spot] += 1
+        self.tick += 1
+        if self.every and self.tick % self.every == 0:
+            self.sample_others(t0)
         dt = time.perf_counter() - t0
         if dt < self.period:
             time.sleep(self.period - dt)
@@ -594,9 +710,14 @@ class Sampler:
             mods_native[mod] += c.owner_native.get(F, 0)
         return mods, mods_native
 
+    def tname(self, tid):
+        n = self.thread_names.get(tid) or ""
+        return " " + n if n else ""
+
     # ---- reports ----------------------------------------------------------
-    def window_lines(self, stamp, seconds, hitches, stats, cpu_pct, threads, top=8):
-        """The one-minute block for the log, and the row for windows.csv."""
+    def window_lines(self, stamp, seconds, hitches, stats, cpu_pct, top=8):
+        """The one-minute block for the log, the row for windows.csv and the
+        rows for threads.csv."""
         w = self.win
         pct = w.pct
         hit_ms = sum(r["ms"] for r in hitches)
@@ -605,24 +726,53 @@ class Sampler:
         head = ("%s  window %.0f s  %d samples | engine %.1f%%  script %.1f%%  natives %.1f%% | "
                 "hitches %d, %.0f ms, max %.0f ms | private %.0f MB  ws %.0f MB  handles %d  threads %d  cpu %.0f%%" % (
                     stamp, seconds, w.total, pct(w.engine), pct(w.interp), pct(w.native),
-                    len(hitches), hit_ms, max_ms, stats["private_mb"], stats["ws_mb"], stats["handles"], threads, cpu_pct))
+                    len(hitches), hit_ms, max_ms, stats["private_mb"], stats["ws_mb"], stats["handles"], len(self.others) + 1, cpu_pct))
         mod_txt = "  ".join("%s %.1f%%" % (m, pct(c)) for m, c in mods.most_common(6))
         tops = w.self_cnt.most_common(top)
         top_txt = " | ".join("%s %.1f%%" % (self.names.get(F)[0], pct(c)) for F, c in tops)
         lines = [head, "   mods: " + (mod_txt or "-"), "   top:  " + (top_txt or "-")]
         for r in sorted(hitches, key=lambda r: -r["ms"])[:10]:
             lines.append("   hitch %s  %6.0f ms  %s" % (time.strftime("%H:%M:%S", time.localtime(r["at"])), r["ms"], self.describe(r)))
+        # the other threads: their cpu this window, where they were, whether one stood still
+        trows = []
+        entries = []
+        for tid, o in self.others.items():
+            cpu = self.p.thread_cpu(tid)
+            prev = self.cpu_prev.get(tid)
+            cpu_ms = (cpu - prev) * 1000.0 if (cpu is not None and prev is not None) else 0.0
+            if cpu is not None:
+                self.cpu_prev[tid] = cpu
+            exe_pct = 100.0 * o.exe / max(1, o.n)
+            top_s = ";".join("+0x%X=%.1f" % (off, 100.0 * c / max(1, o.n)) for off, c in o.offs.most_common(3))
+            mod_s = ";".join("%s=%.1f" % (m, 100.0 * c / max(1, o.n)) for m, c in o.mods.most_common(2))
+            trows.append([stamp, tid, self.thread_names.get(tid, ""), o.n, "%.0f" % exe_pct, "%.0f" % cpu_ms, top_s, mod_s, "%.0f" % o.stall_ms])
+            entries.append((cpu_ms, tid, exe_pct, o))
+        entries.sort(key=lambda e: -e[0])
+        busy = sum(1 for e in entries if e[2] >= 10)
+        parts = []
+        for cpu_ms, tid, exe_pct, o in entries[:3]:
+            top1 = o.offs.most_common(1)
+            parts.append("tid %d%s cpu %.0f ms, exe %.0f%%%s" % (tid, self.tname(tid), cpu_ms, exe_pct, (" at +0x%X" % top1[0][0]) if top1 else ""))
+        lines.append("   threads: %d others, %d of them busy in the exe; top by cpu: %s" % (len(entries), busy, "; ".join(parts) or "-"))
+        for tid, o in sorted(self.others.items(), key=lambda kv: -kv[1].stall_ms)[:5]:
+            if o.stall_ms >= self.min_run_ms:
+                lines.append("   thread %d%s stood at +0x%X for %.0f ms (from %s)" % (
+                    tid, self.tname(tid), o.stall_at_rip, o.stall_ms, time.strftime("%H:%M:%S", time.localtime(o.stall_at))))
         row = [stamp, w.total, "%.1f" % pct(w.engine), "%.1f" % pct(w.interp), "%.1f" % pct(w.native),
                len(hitches), "%.0f" % hit_ms, "%.0f" % max_ms, "%.0f" % stats["private_mb"], "%.0f" % stats["ws_mb"],
-               stats["handles"], threads, "%.0f" % cpu_pct,
+               stats["handles"], len(self.others) + 1, "%.0f" % cpu_pct,
                ";".join("%s=%.1f" % (m, pct(c)) for m, c in mods.most_common(6)),
                ";".join("%s=%.1f" % (self.names.get(F)[0], pct(c)) for F, c in tops[:5])]
-        return lines, row
+        return lines, row, trows
 
     def rotate_window(self):
         """Fold the window into the cumulative counters; return the window's hitches."""
         self.cum.add(self.win)
         self.win = Counters()
+        for tid, o in self.others.items():
+            self.others_cum.setdefault(tid, OtherThread()).add(o)
+            self.others[tid] = OtherThread()
+        self.refresh_threads()
         hitches, self.hitches_win = self.hitches_win, []
         return hitches
 
@@ -630,7 +780,7 @@ class Sampler:
         pct = c.pct
         names = self.names
         out = []
-        out.append("samples %d" % c.total)
+        out.append("main thread: %d samples" % c.total)
         out.append("  %5.1f%%  engine only, no script on the stack (of which %.1f%% entering/leaving the VM)" % (pct(c.engine), pct(c.vm_entry)))
         out.append("  %5.1f%%  interpreting script" % pct(c.interp))
         out.append("  %5.1f%%  engine natives called from script" % pct(c.native))
@@ -661,21 +811,34 @@ class Sampler:
                 out.append("  %s  %7.0f ms  %s" % (time.strftime("%H:%M:%S", time.localtime(r["at"])), r["ms"], self.describe(r)))
             out.append("  (engine addresses are named by resolve-samples.py against the same exe)")
         else:
-            out.append("no stretch >= %.0f ms in one piece of work: nothing here would be felt as a freeze" % self.min_run_ms)
+            out.append("no stretch >= %.0f ms in one piece of work on the main thread: nothing here would be felt as a freeze" % self.min_run_ms)
         engine_only = sum(c.engine_off.values()) + sum(c.engine_mod.values())
         if engine_only:
             out.append("")
-            out.append("engine time with no script on the stack (%.1f%%), by place:" % pct(engine_only))
+            out.append("main-thread engine time with no script on the stack (%.1f%%), by place:" % pct(engine_only))
             for m, n in c.engine_mod.most_common(4):
                 out.append("  %6.2f%%  [module] %s" % (pct(n), m))
             for o, n in c.engine_off.most_common(8):
                 out.append("  %6.2f%%  +0x%X" % (pct(n), o))
+        if self.others_cum:
+            out.append("")
+            out.append("other threads (samples at 1/%d of the main thread's rate; 'exe' = busy in the engine, the rest is waiting in system code):" % max(1, self.every))
+            ranked = sorted(self.others_cum.items(), key=lambda kv: -kv[1].exe)
+            for tid, o in ranked[:10]:
+                top_s = ", ".join("+0x%X %.1f%%" % (off, 100.0 * n / max(1, o.n)) for off, n in o.offs.most_common(3))
+                mod_s = ", ".join("%s %.0f%%" % (m, 100.0 * n / max(1, o.n)) for m, n in o.mods.most_common(1))
+                out.append("  tid %-6d%-18s %6d samples  exe %5.1f%%  %s%s" % (
+                    tid, self.tname(tid), o.n, 100.0 * o.exe / max(1, o.n), top_s or "-", ("  | " + mod_s) if mod_s else ""))
+            stalls = [(o.stall_ms, tid, o) for tid, o in self.others_cum.items() if o.stall_ms >= self.min_run_ms]
+            for ms, tid, o in sorted(stalls, key=lambda s: -s[0])[:8]:
+                out.append("  thread %d%s stood at +0x%X for %.0f ms at %s" % (
+                    tid, self.tname(tid), o.stall_at_rip, ms, time.strftime("%H:%M:%S", time.localtime(o.stall_at))))
         return out
 
-    def write_csvs(self, prefix, c, pid, seg, all_hitches):
+    def write_csvs(self, prefix, c, seg, all_hitches):
         names = self.names
         with open(prefix + ".functions.csv", "w", encoding="utf-8", newline="") as fh:
-            fh.write("# pid %d segment %d samples %d engine %d interp %d native %d\n" % (pid, seg, c.total, c.engine, c.interp, c.native))
+            fh.write("# pid %d segment %d samples %d engine %d interp %d native %d\n" % (self.pid, seg, c.total, c.engine, c.interp, c.native))
             for r in sorted(all_hitches, key=lambda r: -r["ms"])[:40]:
                 fh.write("# hitch %s %.0f ms: %s\n" % (time.strftime("%H:%M:%S", time.localtime(r["at"])), r["ms"], self.describe(r)))
             w = csv.writer(fh)
@@ -685,17 +848,23 @@ class Sampler:
                 w.writerow([nm, mod, (path or "").replace("\\", "/"), line, c.self_cnt.get(F, 0), c.native_cnt.get(F, 0), n, c.owner_cnt.get(F, 0)])
         with open(prefix + ".engine.csv", "w", encoding="utf-8", newline="") as fh:
             # the collect-samples.ps1 format, so resolve-samples.py names these
-            fh.write("# dayz script-profile, engine-only samples of the main thread\n")
-            fh.write("# exe_base=0x%X pid=%d segment=%d samples=%d\n" % (self.base, pid, seg, c.total))
+            fh.write("# dayz script-profile: the main thread's engine-only samples, then every other thread at 1/%d of its rate\n" % max(1, self.every))
+            fh.write("# exe_base=0x%X pid=%d segment=%d main_tid=%d samples=%d\n" % (self.base, self.pid, seg, self.main_tid, c.total))
             fh.write("tid,kind,where,count\n")
             for o, n in c.engine_off.most_common():
                 fh.write("%d,exe,%X,%d\n" % (self.main_tid, o, n))
             for m, n in c.engine_mod.most_common():
                 fh.write("%d,module,%s,%d\n" % (self.main_tid, m, n))
+            for tid, o in self.others_cum.items():
+                for off, n in o.offs.most_common():
+                    fh.write("%d,exe,%X,%d\n" % (tid, off, n))
+                for m, n in o.mods.most_common():
+                    fh.write("%d,module,%s,%d\n" % (tid, m, n))
 
 
 WINDOW_COLUMNS = ["time", "segment", "pid", "samples", "engine_pct", "interp_pct", "native_pct", "hitches", "hitch_ms",
                   "max_hitch_ms", "private_mb", "ws_mb", "handles", "threads", "cpu_pct", "mods", "top"]
+THREAD_COLUMNS = ["time", "segment", "pid", "tid", "name", "samples", "exe_pct", "cpu_ms", "top", "module", "stall_ms"]
 
 
 class Files:
@@ -707,7 +876,9 @@ class Files:
         self.log = prefix + ".log"
         self.windows = prefix + ".windows.csv"
         self.hitches = prefix + ".hitches.csv"
-        for path, header in ((self.windows, WINDOW_COLUMNS), (self.hitches, ["time", "segment", "pid", "ms", "kind", "description"])):
+        self.threads = prefix + ".threads.csv"
+        for path, header in ((self.windows, WINDOW_COLUMNS), (self.hitches, ["time", "segment", "pid", "ms", "kind", "description"]),
+                             (self.threads, THREAD_COLUMNS)):
             if not os.path.exists(path):
                 with open(path, "w", encoding="utf-8", newline="") as fh:
                     csv.writer(fh).writerow(header)
@@ -716,14 +887,17 @@ class Files:
         with open(self.log, "a", encoding="utf-8") as fh:
             fh.write(text + "\n")
 
-    def row(self, path, row):
+    def rows(self, path, rows):
         with open(path, "a", encoding="utf-8", newline="") as fh:
-            csv.writer(fh).writerow(row)
+            w = csv.writer(fh)
+            for row in rows:
+                w.writerow(row)
 
 
 def attach(pid, exe_name, out):
-    """Open the process, check the build, find the main thread. Returns a
-    Sampler or a string saying why not."""
+    """Open the process, check the build, find the main thread. Returns the
+    pieces a Sampler needs, or a string saying why not ('fatal: ...' for a
+    build that does not match; anything else is worth retrying)."""
     base = exe_base(pid, exe_name)
     if not base:
         return "cannot see the modules of pid %d (run this elevated, like the server)" % pid
@@ -751,12 +925,6 @@ def attach(pid, exe_name, out):
             if r and base <= r < base + exe_size:
                 warm[t] += 1
         time.sleep(0.005)
-    for t in tids:
-        if t not in warm:
-            h = p.handles.get(t)
-            if h:
-                k32.CloseHandle(h)
-                p.handles[t] = None
     if not warm:
         p.close()
         return "no thread is executing inside the exe (is the server still loading?)"
@@ -765,16 +933,9 @@ def attach(pid, exe_name, out):
     return p, base, exe_size, mods, cs, main_tid
 
 
-def exe_base(pid, name):
-    for base, size, mod in modules_of(pid):
-        if mod.lower() == name.lower():
-            return base
-    return None
-
-
 def run_segment(a, pid, seg, deadline, files):
     """Sample one server process until it exits or the deadline passes.
-    Returns 'exited', 'done' or 'refused'."""
+    Returns 'fatal', 'retry', 'exited' or 'done'."""
     def out(text):
         if files:
             files.say(text)
@@ -785,13 +946,14 @@ def run_segment(a, pid, seg, deadline, files):
         out(got)
         return "fatal" if got.startswith("fatal") else "retry"
     p, base, exe_size, mods, cs, main_tid = got
-    s = Sampler(p, base, exe_size, mods, cs, main_tid, a.hz, a.min_run_ms)
+    s = Sampler(p, pid, base, exe_size, mods, cs, main_tid, a.hz, a.threads_hz, a.min_run_ms)
     window = a.window if files else max(1.0, a.seconds)
     all_hitches = []
     stats0 = p.stats()
     wall0 = time.time()
     next_flush = wall0 + window
     exited = False
+    stopped = False
     try:
         while time.time() < deadline:
             if not s.sample():
@@ -809,21 +971,21 @@ def run_segment(a, pid, seg, deadline, files):
                 wall = time.time()
                 cpu_pct = 100.0 * (stats["cpu_s"] - stats0["cpu_s"]) / max(1e-9, wall - wall0)
                 stamp = time.strftime("%Y-%m-%d %H:%M:%S")
-                lines, row = s.window_lines(stamp, wall - wall0, hit, stats, cpu_pct, len(threads_of(pid)))
+                lines, row, trows = s.window_lines(stamp, wall - wall0, hit, stats, cpu_pct)
                 if files:
                     files.say("\n".join(lines))
-                    files.row(files.windows, [stamp, seg, pid] + row[1:])
-                    for r in hit:
-                        files.row(files.hitches, [time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(r["at"])), seg, pid, "%.0f" % r["ms"], r["kind"], s.describe(r)])
+                    files.rows(files.windows, [[stamp, seg, pid] + row[1:]])
+                    files.rows(files.hitches, [[time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(r["at"])), seg, pid, "%.0f" % r["ms"], r["kind"], s.describe(r)] for r in hit])
+                    files.rows(files.threads, [[t[0], seg, pid] + t[1:] for t in trows])
                     print(lines[0], flush=True)
                 all_hitches.extend(s.rotate_window())
                 if files:
-                    s.write_csvs(files.prefix, s.cum, pid, seg, all_hitches)
+                    s.write_csvs(files.prefix, s.cum, seg, all_hitches)
                 stats0, wall0 = stats, wall
                 next_flush = wall + window
     except KeyboardInterrupt:
         out("stopped by the user")
-        deadline = 0
+        stopped = True
     s.close_run()
     all_hitches.extend(s.rotate_window())
     c = s.cum
@@ -832,17 +994,17 @@ def run_segment(a, pid, seg, deadline, files):
         files.say("")
         files.say("==== segment %d, pid %d: %s ====" % (seg, pid, "the server exited" if exited else "end of run"))
         files.say("\n".join(report))
-        s.write_csvs(files.prefix, c, pid, seg, all_hitches)
+        s.write_csvs(files.prefix, c, seg, all_hitches)
         print("segment %d written to %s.*" % (seg, files.prefix), flush=True)
     else:
         print()
         print("\n".join(report))
         if a.out:
-            s.write_csvs(a.out, c, pid, seg, all_hitches)
+            s.write_csvs(a.out, c, seg, all_hitches)
             print()
             print("written: %s.functions.csv and %s.engine.csv" % (a.out, a.out))
     p.close()
-    if deadline == 0:
+    if stopped:
         return "done"
     return "exited" if exited else "done"
 
@@ -854,9 +1016,10 @@ def main():
     ap.add_argument("--seconds", type=float, default=0, help="sample this long and report on the screen (a one-window run)")
     ap.add_argument("--hours", type=float, default=24, help="monitor this long, one window per minute into files (the default mode)")
     ap.add_argument("--window", type=float, default=60, help="seconds per window in monitor mode")
-    ap.add_argument("--hz", type=float, default=200)
+    ap.add_argument("--hz", type=float, default=200, help="main-thread samples per second")
+    ap.add_argument("--threads-hz", type=float, default=50, help="samples per second of every other thread (0 = only the main thread)")
     ap.add_argument("--top", type=int, default=30)
-    ap.add_argument("--min-run-ms", type=float, default=150, help="report stretches where the main thread stayed in one piece of work at least this long")
+    ap.add_argument("--min-run-ms", type=float, default=150, help="report stretches where a thread stayed in one piece of work at least this long")
     ap.add_argument("--out", default="", help="file prefix; monitor mode default: script-profile-<date> in the current directory")
     a = ap.parse_args()
 
@@ -870,9 +1033,9 @@ def main():
     if not short:
         prefix = a.out or ("script-profile-" + time.strftime("%Y%m%d-%H%M"))
         files = Files(prefix)
-        files.say("==== script-profile monitor started %s: %.1f h, %.0f s windows, %.0f Hz, hitch threshold %.0f ms ====" % (
-            time.strftime("%Y-%m-%d %H:%M:%S"), a.hours, a.window, a.hz, a.min_run_ms))
-        print("monitoring %s for %.1f h; files: %s.log / .windows.csv / .hitches.csv / .functions.csv / .engine.csv" % (a.exe, a.hours, prefix), flush=True)
+        files.say("==== script-profile monitor started %s: %.1f h, %.0f s windows, %.0f Hz main thread, %.0f Hz other threads, stretch threshold %.0f ms ====" % (
+            time.strftime("%Y-%m-%d %H:%M:%S"), a.hours, a.window, a.hz, a.threads_hz, a.min_run_ms))
+        print("monitoring %s for %.1f h; files: %s.log / .windows.csv / .threads.csv / .hitches.csv / .functions.csv / .engine.csv" % (a.exe, a.hours, prefix), flush=True)
         print("close this window to stop; nothing is lost but the current minute", flush=True)
     deadline = time.time() + (a.seconds if short else a.hours * 3600)
     seg = 0

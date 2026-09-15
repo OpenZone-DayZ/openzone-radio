@@ -1,22 +1,26 @@
 ﻿<#
 .SYNOPSIS
 Script-level profiler and long-run monitor for the retail DayZ server:
-which script function, from which mod, the main thread is running, and every
-freeze of that thread -- without Python, for hours, surviving server restarts.
+which script function, from which mod, the main thread is running, every
+freeze of that thread, and what every other thread is doing -- without
+Python, for hours, surviving server restarts.
 
 .DESCRIPTION
 Same method as script-profile.py: samples the main thread of
-DayZServer_x64.exe and on every sample reads the Enforce VM's own call stack.
-Nothing is installed; the game process is only read, never written.
+DayZServer_x64.exe and on every sample reads the Enforce VM's own call stack;
+every other thread is sampled too (addresses only, at a lower rate) with its
+CPU time per minute, so a freeze that does not live on the main thread still
+shows up, by thread. Nothing is installed; the game process is only read.
 
 Double-click profile-server.bat, or from PowerShell:
 
     powershell -ExecutionPolicy Bypass -File script-profile.ps1
         the monitor (24 h by default): every minute one window goes to
-        <out>.log and <out>.windows.csv, every freeze of the main thread to
+        <out>.log and <out>.windows.csv, every thread's minute to
+        <out>.threads.csv, every freeze of the main thread to
         <out>.hitches.csv, the cumulative <out>.functions.csv and
-        <out>.engine.csv are rewritten; when the server restarts it waits for
-        the new process and carries on. Closing the window at any moment
+        <out>.engine.csv are rewritten; when the server restarts it waits
+        for the new process and carries on. Closing the window at any moment
         loses at most the current minute. Files land next to this script.
 
     powershell -ExecutionPolicy Bypass -File script-profile.ps1 -Seconds 60
@@ -32,6 +36,9 @@ How long the monitor runs (default 24).
 .PARAMETER Seconds
 Sample this long and print the report instead of monitoring.
 
+.PARAMETER ThreadsHz
+Samples per second of every other thread (default 50; 0 = main thread only).
+
 .PARAMETER Out
 File prefix (default: script-profile-<date> next to this script).
 #>
@@ -42,6 +49,7 @@ param(
     [double]$Hours = 24,
     [double]$Window = 60,
     [double]$Hz = 200,
+    [double]$ThreadsHz = 50,
     [int]$Top = 30,
     [double]$MinRunMs = 150,
     [string]$Out = "",
@@ -52,7 +60,7 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 if (-not $isAdmin -and -not $NoElevate) {
     $argList = @("-ExecutionPolicy", "Bypass", "-NoExit", "-File", ('"' + $PSCommandPath + '"'),
                  "-ProcessIdToSample", $ProcessIdToSample, "-Exe", $Exe, "-Seconds", $Seconds, "-Hours", $Hours,
-                 "-Window", $Window, "-Hz", $Hz, "-Top", $Top, "-MinRunMs", $MinRunMs)
+                 "-Window", $Window, "-Hz", $Hz, "-ThreadsHz", $ThreadsHz, "-Top", $Top, "-MinRunMs", $MinRunMs)
     if ($Out -ne "") { $argList += @("-Out", ('"' + $Out + '"')) }
     Write-Host "the server runs elevated, so this asks for elevation too..."
     Start-Process powershell.exe -Verb RunAs -ArgumentList $argList
@@ -79,6 +87,9 @@ public class DzScriptProfiler
     [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetThreadContext(IntPtr h, IntPtr ctx);
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
     [DllImport("kernel32.dll")] static extern uint WaitForSingleObject(IntPtr h, uint ms);
+    [DllImport("kernel32.dll")] static extern bool GetThreadTimes(IntPtr h, out long creation, out long exit, out long kernel, out long user);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern int GetThreadDescription(IntPtr h, out IntPtr desc);
+    [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr p);
     [DllImport("winmm.dll")] static extern uint timeBeginPeriod(uint ms);
     [DllImport("winmm.dll")] static extern uint timeEndPeriod(uint ms);
     [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr CreateWaitableTimerExW(IntPtr attrs, IntPtr name, uint flags, uint access);
@@ -117,6 +128,7 @@ public class DzScriptProfiler
     List<ProcessModule> mods = new List<ProcessModule>();
     IntPtr napTimer = IntPtr.Zero;
     static volatile bool stopRequested = false;
+    static bool descriptionsWork = true;
 
     // ---- names --------------------------------------------------------------
     class Info { public string Name; public string Mod; public string File; public int Line; public bool IsScript; }
@@ -149,11 +161,30 @@ public class DzScriptProfiler
         public double Pct(int n) { return 100.0 * n / Math.Max(1, Total); }
     }
     class Stretch { public string Kind; public long Key; public int N; public double First, Last, Ms; public DateTime At; public Dictionary<long, int> Spots = new Dictionary<long, int>(); }
+    // What is known about one non-main thread: where it was, and the longest
+    // time it stood at one exe address (a spin, a lock, one long call).
+    class OtherThread
+    {
+        public int N, Exe;
+        public Dictionary<long, int> Offs = new Dictionary<long, int>();
+        public Dictionary<string, int> Mods = new Dictionary<string, int>();
+        public long StallRip = -1, StallAtRip; public double StallFirst, StallMs; public DateTime StallAt;
+        public void Add(OtherThread o)
+        {
+            N += o.N; Exe += o.Exe; Merge(Offs, o.Offs);
+            foreach (KeyValuePair<string, int> kv in o.Mods) Bump(Mods, kv.Key, kv.Value);
+            if (o.StallMs > StallMs) { StallMs = o.StallMs; StallAtRip = o.StallAtRip; StallAt = o.StallAt; }
+        }
+    }
 
     Counters win = new Counters(), cum = new Counters();
     Stretch run = null;
     List<Stretch> hitchesWin = new List<Stretch>();
+    Dictionary<uint, OtherThread> others = new Dictionary<uint, OtherThread>(), othersCum = new Dictionary<uint, OtherThread>();
+    Dictionary<uint, double> cpuPrev = new Dictionary<uint, double>();
+    Dictionary<uint, string> threadNames = new Dictionary<uint, string>();
     double periodMs, minRunMs;
+    int every, tick;
 
     static void Bump(Dictionary<long, int> d, long k) { int v; d.TryGetValue(k, out v); d[k] = v + 1; }
     static void Bump(Dictionary<string, int> d, string k, int by) { int v; d.TryGetValue(k, out v); d[k] = v + by; }
@@ -207,6 +238,11 @@ public class DzScriptProfiler
         if (!threads.TryGetValue(tid, out th)) { th = OpenThread(THREAD_ALL, false, tid); threads[tid] = th; }
         return th;
     }
+    void DropThread(uint tid)
+    {
+        IntPtr th;
+        if (threads.TryGetValue(tid, out th)) { if (th != IntPtr.Zero) CloseHandle(th); threads.Remove(tid); }
+    }
     // rip of a thread, or -1. With hold=true the thread stays suspended so the
     // VM's call stack can be read consistently; call Release afterwards.
     long Rip(uint tid, bool hold)
@@ -228,6 +264,28 @@ public class DzScriptProfiler
     }
     void Release(uint tid) { IntPtr th; if (threads.TryGetValue(tid, out th) && th != IntPtr.Zero) ResumeThread(th); }
     bool Alive() { return WaitForSingleObject(h, 0) == WAIT_TIMEOUT; }
+    double ThreadCpu(uint tid)
+    {
+        IntPtr th = ThreadHandle(tid);
+        long c, e, k, u;
+        if (th == IntPtr.Zero || !GetThreadTimes(th, out c, out e, out k, out u)) return -1;
+        return (k + u) / 1e7;
+    }
+    string ThreadName(uint tid)
+    {
+        if (!descriptionsWork) return "";
+        IntPtr th = ThreadHandle(tid);
+        if (th == IntPtr.Zero) return "";
+        try
+        {
+            IntPtr s;
+            if (GetThreadDescription(th, out s) < 0 || s == IntPtr.Zero) return "";
+            string name = Marshal.PtrToStringUni(s);
+            LocalFree(s);
+            return name ?? "";
+        }
+        catch (EntryPointNotFoundException) { descriptionsWork = false; return ""; }
+    }
     string ModuleOf(long addr)
     {
         foreach (ProcessModule m in mods)
@@ -256,6 +314,20 @@ public class DzScriptProfiler
             if (SetWaitableTimer(napTimer, ref due, 0, IntPtr.Zero, IntPtr.Zero, false)) { WaitForSingleObject(napTimer, 1000); return; }
         }
         System.Threading.Thread.Sleep((int)Math.Max(1.0, ms));
+    }
+    string TName(uint tid) { string n; return threadNames.TryGetValue(tid, out n) && n.Length > 0 ? " " + n : ""; }
+
+    // The other threads come and go; keep the set current once a window.
+    void RefreshThreads()
+    {
+        HashSet<uint> now = new HashSet<uint>();
+        try { proc.Refresh(); foreach (ProcessThread t in proc.Threads) now.Add((uint)t.Id); } catch (Exception) { }
+        now.Remove(mainTid);
+        List<uint> gone = new List<uint>();
+        foreach (uint tid in others.Keys) if (!now.Contains(tid)) gone.Add(tid);
+        foreach (uint tid in gone) { others.Remove(tid); DropThread(tid); cpuPrev.Remove(tid); }
+        foreach (uint tid in now)
+            if (!others.ContainsKey(tid)) { others[tid] = new OtherThread(); threadNames[tid] = ThreadName(tid); cpuPrev[tid] = ThreadCpu(tid); }
     }
 
     // ---- names --------------------------------------------------------------
@@ -436,13 +508,13 @@ public class DzScriptProfiler
         }
         mainTid = 0; int best = 0;
         foreach (KeyValuePair<uint, int> kv in warm) if (kv.Value > best) { best = kv.Value; mainTid = kv.Key; }
-        foreach (uint t in tids)
-            if (t != mainTid && threads.ContainsKey(t) && threads[t] != IntPtr.Zero) { CloseHandle(threads[t]); threads[t] = IntPtr.Zero; }
         if (mainTid == 0) { Detach(); return "no thread is executing inside the exe (is the server still loading?)"; }
         say("main thread " + mainTid);
         vlo = exeBase + VM_LO; vhi = exeBase + VM_HI;
         infos.Clear(); classMaps.Clear(); dbgs.Clear(); scriptFlag.Clear();
         win = new Counters(); cum = new Counters(); run = null; hitchesWin.Clear();
+        others.Clear(); othersCum.Clear(); cpuPrev.Clear(); threadNames.Clear(); tick = 0;
+        RefreshThreads();
         return "";
     }
     void Detach()
@@ -461,6 +533,29 @@ public class DzScriptProfiler
         r.Ms = (r.Last - r.First) + periodMs;
         if (r.Ms >= minRunMs) hitchesWin.Add(r);
         run = null;
+    }
+    void SampleOthers(double t0)
+    {
+        foreach (KeyValuePair<uint, OtherThread> kv in others)
+        {
+            OtherThread o = kv.Value;
+            long rip = Rip(kv.Key, false);
+            if (rip == -1) continue;
+            o.N++;
+            if (rip >= exeBase && rip < exeHi)
+            {
+                long off = rip - exeBase;
+                o.Exe++;
+                Bump(o.Offs, off);
+                if (o.StallRip == off)
+                {
+                    double ms = (t0 - o.StallFirst) + periodMs * every;
+                    if (ms > o.StallMs) { o.StallMs = ms; o.StallAtRip = off; }
+                }
+                else { o.StallRip = off; o.StallFirst = t0; o.StallAt = DateTime.Now; }
+            }
+            else { Bump(o.Mods, ModuleOf(rip), 1); o.StallRip = -1; }
+        }
     }
     bool Sample(Stopwatch clock)
     {
@@ -520,6 +615,8 @@ public class DzScriptProfiler
             run = r = new Stretch(); r.Kind = kind; r.Key = key; r.N = 1; r.First = t0; r.Last = t0; r.At = DateTime.Now;
         }
         Bump(r.Spots, spot);
+        tick++;
+        if (every > 0 && tick % every == 0) SampleOthers(t0);
         double left = periodMs - (clock.Elapsed.TotalMilliseconds - t0);
         if (left > 0.2) Nap(left);
         return true;
@@ -539,7 +636,7 @@ public class DzScriptProfiler
         }
         mods = SortedS(m);
     }
-    void WindowLines(string stamp, double seconds, List<Stretch> hitches, int threadsN, double cpuPct, out List<string> lines, out string row)
+    void WindowLines(string stamp, double seconds, List<Stretch> hitches, double cpuPct, out List<string> lines, out string row, out List<string> trows)
     {
         Counters w = win;
         proc.Refresh();
@@ -551,7 +648,7 @@ public class DzScriptProfiler
         ByMod(w, out mods, out modsNative);
         lines = new List<string>();
         lines.Add(F("{0}  window {1:F0} s  {2} samples | engine {3:F1}%  script {4:F1}%  natives {5:F1}% | hitches {6}, {7:F0} ms, max {8:F0} ms | private {9:F0} MB  ws {10:F0} MB  handles {11}  threads {12}  cpu {13:F0}%",
-            stamp, seconds, w.Total, w.Pct(w.Engine), w.Pct(w.Interp), w.Pct(w.NativeN), hitches.Count, hitMs, maxMs, privMb, wsMb, handles, threadsN, cpuPct));
+            stamp, seconds, w.Total, w.Pct(w.Engine), w.Pct(w.Interp), w.Pct(w.NativeN), hitches.Count, hitMs, maxMs, privMb, wsMb, handles, others.Count + 1, cpuPct));
         List<string> mt = new List<string>(), mc = new List<string>();
         for (int i = 0; i < mods.Count && i < 6; i++) { mt.Add(F("{0} {1:F1}%", mods[i].Key, w.Pct(mods[i].Value))); mc.Add(F("{0}={1:F1}", mods[i].Key, w.Pct(mods[i].Value))); }
         List<KeyValuePair<long, int>> tops = Sorted(w.Self);
@@ -562,14 +659,61 @@ public class DzScriptProfiler
         List<Stretch> hs = new List<Stretch>(hitches);
         hs.Sort(delegate (Stretch a, Stretch b) { return b.Ms.CompareTo(a.Ms); });
         for (int i = 0; i < hs.Count && i < 10; i++) lines.Add(F("   hitch {0}  {1,6:F0} ms  {2}", hs[i].At.ToString("HH:mm:ss", Inv), hs[i].Ms, Describe(hs[i])));
+        // the other threads: their cpu this window, where they were, whether one stood still
+        trows = new List<string>();
+        List<KeyValuePair<double, uint>> byCpu = new List<KeyValuePair<double, uint>>();
+        int busy = 0;
+        foreach (KeyValuePair<uint, OtherThread> kv in others)
+        {
+            uint tid = kv.Key; OtherThread o = kv.Value;
+            double cpu = ThreadCpu(tid), prev;
+            double cpuMs = (cpu >= 0 && cpuPrev.TryGetValue(tid, out prev) && prev >= 0) ? (cpu - prev) * 1000.0 : 0.0;
+            if (cpu >= 0) cpuPrev[tid] = cpu;
+            double exePct = 100.0 * o.Exe / Math.Max(1, o.N);
+            if (exePct >= 10) busy++;
+            List<KeyValuePair<long, int>> offs = Sorted(o.Offs);
+            List<string> ts = new List<string>();
+            for (int i = 0; i < offs.Count && i < 3; i++) ts.Add(F("+0x{0:X}={1:F1}", offs[i].Key, 100.0 * offs[i].Value / Math.Max(1, o.N)));
+            List<KeyValuePair<string, int>> ms = SortedS(o.Mods);
+            List<string> msl = new List<string>();
+            for (int i = 0; i < ms.Count && i < 2; i++) msl.Add(F("{0}={1:F1}", ms[i].Key, 100.0 * ms[i].Value / Math.Max(1, o.N)));
+            string name; threadNames.TryGetValue(tid, out name);
+            trows.Add(string.Join(",", new string[] { stamp, tid.ToString(), Csv(name ?? ""), o.N.ToString(), F("{0:F0}", exePct), F("{0:F0}", cpuMs),
+                Csv(string.Join(";", ts.ToArray())), Csv(string.Join(";", msl.ToArray())), F("{0:F0}", o.StallMs) }));
+            byCpu.Add(new KeyValuePair<double, uint>(cpuMs, tid));
+        }
+        byCpu.Sort(delegate (KeyValuePair<double, uint> a, KeyValuePair<double, uint> b) { return b.Key.CompareTo(a.Key); });
+        List<string> parts = new List<string>();
+        for (int i = 0; i < byCpu.Count && i < 3; i++)
+        {
+            OtherThread o = others[byCpu[i].Value];
+            List<KeyValuePair<long, int>> offs = Sorted(o.Offs);
+            parts.Add(F("tid {0}{1} cpu {2:F0} ms, exe {3:F0}%{4}", byCpu[i].Value, TName(byCpu[i].Value), byCpu[i].Key, 100.0 * o.Exe / Math.Max(1, o.N),
+                offs.Count > 0 ? F(" at +0x{0:X}", offs[0].Key) : ""));
+        }
+        lines.Add(F("   threads: {0} others, {1} of them busy in the exe; top by cpu: {2}", others.Count, busy, parts.Count > 0 ? string.Join("; ", parts.ToArray()) : "-"));
+        List<KeyValuePair<uint, OtherThread>> stalls = new List<KeyValuePair<uint, OtherThread>>();
+        foreach (KeyValuePair<uint, OtherThread> kv in others) if (kv.Value.StallMs >= minRunMs) stalls.Add(kv);
+        stalls.Sort(delegate (KeyValuePair<uint, OtherThread> a, KeyValuePair<uint, OtherThread> b) { return b.Value.StallMs.CompareTo(a.Value.StallMs); });
+        for (int i = 0; i < stalls.Count && i < 5; i++)
+            lines.Add(F("   thread {0}{1} stood at +0x{2:X} for {3:F0} ms (from {4})", stalls[i].Key, TName(stalls[i].Key), stalls[i].Value.StallAtRip, stalls[i].Value.StallMs, stalls[i].Value.StallAt.ToString("HH:mm:ss", Inv)));
         row = string.Join(",", new string[] { stamp, w.Total.ToString(), F("{0:F1}", w.Pct(w.Engine)), F("{0:F1}", w.Pct(w.Interp)), F("{0:F1}", w.Pct(w.NativeN)),
-            hitches.Count.ToString(), F("{0:F0}", hitMs), F("{0:F0}", maxMs), F("{0:F0}", privMb), F("{0:F0}", wsMb), handles.ToString(), threadsN.ToString(), F("{0:F0}", cpuPct),
+            hitches.Count.ToString(), F("{0:F0}", hitMs), F("{0:F0}", maxMs), F("{0:F0}", privMb), F("{0:F0}", wsMb), handles.ToString(), (others.Count + 1).ToString(), F("{0:F0}", cpuPct),
             Csv(string.Join(";", mc.ToArray())), Csv(string.Join(";", tc.ToArray())) });
     }
     List<Stretch> RotateWindow()
     {
         cum.Add(win);
         win = new Counters();
+        List<uint> keys = new List<uint>(others.Keys);
+        foreach (uint tid in keys)
+        {
+            OtherThread c;
+            if (!othersCum.TryGetValue(tid, out c)) { c = new OtherThread(); othersCum[tid] = c; }
+            c.Add(others[tid]);
+            others[tid] = new OtherThread();
+        }
+        RefreshThreads();
         List<Stretch> hs = hitchesWin;
         hitchesWin = new List<Stretch>();
         return hs;
@@ -577,7 +721,7 @@ public class DzScriptProfiler
     List<string> ReportLines(Counters c, int top, List<Stretch> allHitches)
     {
         List<string> o = new List<string>();
-        o.Add("samples " + c.Total);
+        o.Add("main thread: " + c.Total + " samples");
         o.Add(F("  {0,5:F1}%  engine only, no script on the stack (of which {1:F1}% entering/leaving the VM)", c.Pct(c.Engine), c.Pct(c.VmEntry)));
         o.Add(F("  {0,5:F1}%  interpreting script", c.Pct(c.Interp)));
         o.Add(F("  {0,5:F1}%  engine natives called from script", c.Pct(c.NativeN)));
@@ -624,18 +768,40 @@ public class DzScriptProfiler
             for (int i = 0; i < hs.Count && i < 15; i++) o.Add(F("  {0}  {1,7:F0} ms  {2}", hs[i].At.ToString("HH:mm:ss", Inv), hs[i].Ms, Describe(hs[i])));
             o.Add("  (engine addresses are named by resolve-samples.py against the same exe)");
         }
-        else o.Add(F("no stretch >= {0:F0} ms in one piece of work: nothing here would be felt as a freeze", minRunMs));
+        else o.Add(F("no stretch >= {0:F0} ms in one piece of work on the main thread: nothing here would be felt as a freeze", minRunMs));
         int engineOnly = 0;
         foreach (KeyValuePair<long, int> kv in c.EngineOff) engineOnly += kv.Value;
         foreach (KeyValuePair<string, int> kv in c.EngineMod) engineOnly += kv.Value;
         if (engineOnly > 0)
         {
             o.Add("");
-            o.Add(F("engine time with no script on the stack ({0:F1}%), by place:", c.Pct(engineOnly)));
+            o.Add(F("main-thread engine time with no script on the stack ({0:F1}%), by place:", c.Pct(engineOnly)));
             List<KeyValuePair<string, int>> em = SortedS(c.EngineMod);
             for (int i = 0; i < em.Count && i < 4; i++) o.Add(F("  {0,6:F2}%  [module] {1}", c.Pct(em[i].Value), em[i].Key));
             List<KeyValuePair<long, int>> eo = Sorted(c.EngineOff);
             for (int i = 0; i < eo.Count && i < 8; i++) o.Add(F("  {0,6:F2}%  +0x{1:X}", c.Pct(eo[i].Value), eo[i].Key));
+        }
+        if (othersCum.Count > 0)
+        {
+            o.Add("");
+            o.Add(F("other threads (samples at 1/{0} of the main thread's rate; 'exe' = busy in the engine, the rest is waiting in system code):", Math.Max(1, every)));
+            List<KeyValuePair<uint, OtherThread>> ranked = new List<KeyValuePair<uint, OtherThread>>(othersCum);
+            ranked.Sort(delegate (KeyValuePair<uint, OtherThread> a, KeyValuePair<uint, OtherThread> b) { return b.Value.Exe.CompareTo(a.Value.Exe); });
+            for (int i = 0; i < ranked.Count && i < 10; i++)
+            {
+                OtherThread ot = ranked[i].Value;
+                List<KeyValuePair<long, int>> offs = Sorted(ot.Offs);
+                List<string> ts = new List<string>();
+                for (int j = 0; j < offs.Count && j < 3; j++) ts.Add(F("+0x{0:X} {1:F1}%", offs[j].Key, 100.0 * offs[j].Value / Math.Max(1, ot.N)));
+                List<KeyValuePair<string, int>> ms = SortedS(ot.Mods);
+                string modTxt = ms.Count > 0 ? F("  | {0} {1:F0}%", ms[0].Key, 100.0 * ms[0].Value / Math.Max(1, ot.N)) : "";
+                o.Add(F("  tid {0,-6}{1,-18} {2,6} samples  exe {3,5:F1}%  {4}{5}", ranked[i].Key, TName(ranked[i].Key), ot.N, 100.0 * ot.Exe / Math.Max(1, ot.N), ts.Count > 0 ? string.Join(", ", ts.ToArray()) : "-", modTxt));
+            }
+            List<KeyValuePair<uint, OtherThread>> stalls = new List<KeyValuePair<uint, OtherThread>>();
+            foreach (KeyValuePair<uint, OtherThread> kv in othersCum) if (kv.Value.StallMs >= minRunMs) stalls.Add(kv);
+            stalls.Sort(delegate (KeyValuePair<uint, OtherThread> a, KeyValuePair<uint, OtherThread> b) { return b.Value.StallMs.CompareTo(a.Value.StallMs); });
+            for (int i = 0; i < stalls.Count && i < 8; i++)
+                o.Add(F("  thread {0}{1} stood at +0x{2:X} for {3:F0} ms at {4}", stalls[i].Key, TName(stalls[i].Key), stalls[i].Value.StallAtRip, stalls[i].Value.StallMs, stalls[i].Value.StallAt.ToString("HH:mm:ss", Inv)));
         }
         return o;
     }
@@ -659,11 +825,16 @@ public class DzScriptProfiler
         using (StreamWriter w = new StreamWriter(prefix + ".engine.csv", false, new UTF8Encoding(false)))
         {
             // the collect-samples.ps1 format, so resolve-samples.py names these
-            w.WriteLine("# dayz script-profile, engine-only samples of the main thread");
-            w.WriteLine(F("# exe_base=0x{0:X} pid={1} segment={2} samples={3}", exeBase, pid, seg, c.Total));
+            w.WriteLine(F("# dayz script-profile: the main thread's engine-only samples, then every other thread at 1/{0} of its rate", Math.Max(1, every)));
+            w.WriteLine(F("# exe_base=0x{0:X} pid={1} segment={2} main_tid={3} samples={4}", exeBase, pid, seg, mainTid, c.Total));
             w.WriteLine("tid,kind,where,count");
             foreach (KeyValuePair<long, int> kv in Sorted(c.EngineOff)) w.WriteLine(F("{0},exe,{1:X},{2}", mainTid, kv.Key, kv.Value));
             foreach (KeyValuePair<string, int> kv in SortedS(c.EngineMod)) w.WriteLine(F("{0},module,{1},{2}", mainTid, kv.Key, kv.Value));
+            foreach (KeyValuePair<uint, OtherThread> t in othersCum)
+            {
+                foreach (KeyValuePair<long, int> kv in Sorted(t.Value.Offs)) w.WriteLine(F("{0},exe,{1:X},{2}", t.Key, kv.Key, kv.Value));
+                foreach (KeyValuePair<string, int> kv in SortedS(t.Value.Mods)) w.WriteLine(F("{0},module,{1},{2}", t.Key, kv.Key, kv.Value));
+            }
         }
     }
 
@@ -683,7 +854,7 @@ public class DzScriptProfiler
     }
 
     // Returns "fatal", "retry", "exited" or "done".
-    string RunSegment(int wantPid, string exeName, int seg, DateTime deadline, double windowSec, int top, string prefix, bool shortMode)
+    string RunSegment(int wantPid, string exeName, int seg, DateTime deadline, double windowSec, int top, string prefix)
     {
         Action<string> say = delegate (string t) { if (prefix != null) Append(prefix + ".log", t); Console.WriteLine(t); };
         string err = Attach(wantPid, exeName, say);
@@ -707,17 +878,19 @@ public class DzScriptProfiler
                 List<Stretch> hit = hitchesWin;
                 DateTime wall = DateTime.Now;
                 TimeSpan cpu = TimeSpan.Zero;
-                int threadsN = 0;
-                try { proc.Refresh(); cpu = proc.TotalProcessorTime; threadsN = proc.Threads.Count; } catch (Exception) { }
+                try { proc.Refresh(); cpu = proc.TotalProcessorTime; } catch (Exception) { }
                 double cpuPct = 100.0 * (cpu - cpu0).TotalSeconds / Math.Max(1e-9, (wall - wall0).TotalSeconds);
                 string stamp = Stamp();
-                List<string> lines; string row;
-                WindowLines(stamp, (wall - wall0).TotalSeconds, hit, threadsN, cpuPct, out lines, out row);
+                List<string> lines, trows; string row;
+                WindowLines(stamp, (wall - wall0).TotalSeconds, hit, cpuPct, out lines, out row, out trows);
                 if (prefix != null)
                 {
                     Append(prefix + ".log", string.Join("\n", lines.ToArray()));
                     Append(prefix + ".windows.csv", stamp + "," + seg + "," + pid + "," + row.Substring(row.IndexOf(',') + 1));
                     foreach (Stretch r in hit) Append(prefix + ".hitches.csv", string.Join(",", new string[] { r.At.ToString("yyyy-MM-dd HH:mm:ss", Inv), seg.ToString(), pid.ToString(), F("{0:F0}", r.Ms), r.Kind, Csv(Describe(r)) }));
+                    StringBuilder tb = new StringBuilder();
+                    foreach (string t in trows) tb.Append(stamp + "," + seg + "," + pid + "," + t.Substring(t.IndexOf(',') + 1) + "\n");
+                    File.AppendAllText(prefix + ".threads.csv", tb.ToString(), new UTF8Encoding(false));
                     Console.WriteLine(lines[0]);
                 }
                 all.AddRange(RotateWindow());
@@ -746,10 +919,11 @@ public class DzScriptProfiler
         return exited ? "exited" : "done";
     }
 
-    public static int Run(string exeName, int wantPid, double seconds, double hours, double windowSec, double hz, int top, double minRunMs, string prefix)
+    public static int Run(string exeName, int wantPid, double seconds, double hours, double windowSec, double hz, double threadsHz, int top, double minRunMs, string prefix)
     {
         DzScriptProfiler p = new DzScriptProfiler();
         p.periodMs = 1000.0 / hz;
+        p.every = threadsHz > 0 ? Math.Max(1, (int)Math.Round(hz / threadsHz)) : 0;
         p.minRunMs = minRunMs;
         bool shortMode = seconds > 0;
         if (shortMode) prefix = null;
@@ -762,8 +936,9 @@ public class DzScriptProfiler
             {
                 EnsureHeader(prefix + ".windows.csv", "time,segment,pid,samples,engine_pct,interp_pct,native_pct,hitches,hitch_ms,max_hitch_ms,private_mb,ws_mb,handles,threads,cpu_pct,mods,top");
                 EnsureHeader(prefix + ".hitches.csv", "time,segment,pid,ms,kind,description");
-                Append(prefix + ".log", F("==== script-profile monitor started {0}: {1:F1} h, {2:F0} s windows, {3:F0} Hz, hitch threshold {4:F0} ms ====", Stamp(), hours, windowSec, hz, minRunMs));
-                Console.WriteLine(F("monitoring {0} for {1:F1} h; files: {2}.log / .windows.csv / .hitches.csv / .functions.csv / .engine.csv", exeName, hours, prefix));
+                EnsureHeader(prefix + ".threads.csv", "time,segment,pid,tid,name,samples,exe_pct,cpu_ms,top,module,stall_ms");
+                Append(prefix + ".log", F("==== script-profile monitor started {0}: {1:F1} h, {2:F0} s windows, {3:F0} Hz main thread, {4:F0} Hz other threads, stretch threshold {5:F0} ms ====", Stamp(), hours, windowSec, hz, threadsHz, minRunMs));
+                Console.WriteLine(F("monitoring {0} for {1:F1} h; files: {2}.log / .windows.csv / .threads.csv / .hitches.csv / .functions.csv / .engine.csv", exeName, hours, prefix));
                 Console.WriteLine("close this window to stop; nothing is lost but the current minute");
             }
             DateTime deadline = DateTime.Now.AddSeconds(shortMode ? seconds : hours * 3600.0);
@@ -781,7 +956,7 @@ public class DzScriptProfiler
                     continue;
                 }
                 waiting = false;
-                string rc = p.RunSegment(pid, exeName, seg + 1, deadline, window, top, prefix, shortMode);
+                string rc = p.RunSegment(pid, exeName, seg + 1, deadline, window, top, prefix);
                 if (rc == "fatal" || (shortMode && rc != "done")) return 1;
                 if (rc == "done") return 0;
                 if (rc == "retry") { System.Threading.Thread.Sleep(10000); continue; }
@@ -809,5 +984,5 @@ if (-not ("DzScriptProfiler" -as [type])) {
 if ($Seconds -le 0 -and $Out -eq "") {
     $Out = Join-Path (Split-Path -Parent $PSCommandPath) ("script-profile-" + (Get-Date -Format "yyyyMMdd-HHmm"))
 }
-$rc = [DzScriptProfiler]::Run($Exe, $ProcessIdToSample, $Seconds, $Hours, $Window, $Hz, $Top, $MinRunMs, $Out)
+$rc = [DzScriptProfiler]::Run($Exe, $ProcessIdToSample, $Seconds, $Hours, $Window, $Hz, $ThreadsHz, $Top, $MinRunMs, $Out)
 exit $rc

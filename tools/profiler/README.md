@@ -51,12 +51,17 @@ restarts, and writes next to itself:
 | `script-profile-<date>.log` | one block per minute: the engine/script split, time per mod, the top functions, every freeze with its time; a full report at the end of each server run |
 | `…windows.csv` | the same minute by minute as numbers: memory, handles, threads, CPU, hitches, top functions |
 | `…hitches.csv` | every stretch where the main thread stayed in one piece of work for 150 ms or more, with the time, the function it was in or the engine address |
+| `…threads.csv` | every other thread, minute by minute: its name (`NetPeerUDP::listener`, `enfWorkShort 1`, …), CPU time, share of samples inside the engine, the addresses it stood at, and the longest time it stood at one address |
 | `…functions.csv` | every function's counts for the current server run, rewritten each minute |
-| `…engine.csv` | engine-only samples in `collect-samples` format, so `resolve-samples.py` names them |
+| `…engine.csv` | engine-only samples of the main thread plus every other thread, in `collect-samples` format, so `resolve-samples.py` names them per thread |
 
 Closing the window at any moment loses at most the current minute. Ask for
 the whole folder back; the `.log` alone already answers "was the server
-freezing, when, and in whose code".
+freezing, when, and in whose code" — and, when the main thread was quiet
+while players froze, which other thread was busy or stuck instead. The other
+threads are sampled at a quarter of the main thread's rate (`-ThreadsHz`,
+default 50); their share in the exe is "busy", the rest is waiting in system
+code.
 
 ### On the spot
 
