@@ -109,6 +109,11 @@ def main():
             if i >= 0:
                 b, e, _ = pd.entries[i]
                 if b <= rva < e:
+                    # A large function has several .pdata entries chained
+                    # together; the head is the one no entry ends at.
+                    while i > 0 and pd.entries[i - 1][1] == b:
+                        i -= 1
+                        b = pd.entries[i][0]
                     key = "+0x%X" % b
                     if b in KNOWN:
                         key += "  " + KNOWN[b]
