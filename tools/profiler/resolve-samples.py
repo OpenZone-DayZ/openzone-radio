@@ -46,9 +46,26 @@ KNOWN = {
     0x9A4570: "VON map: Add(freq)",
     0x9A4FB0: "VON map: Contains(freq)",
     0x9A69A0: "VON map: Remove(freq)",
-    0x9AA800: "VON: reconcile listener set",
+    0x9AA800: "VON: reconcile listener set (desired list in, stale entries out)",
     0x9D20D0: "VON: per-frame update(dt)",
+    0x8735D0: "VON: for-each-player callback of the transmitter pass",
+    0x258570: "entity event -> script handler lookup (walks the class chain)",
+    0x257F90: "script event handler call (refcounted delegate)",
+    0x257E30: "script event handler call (refcounted delegate)",
+    0xAAF880: "Bullet: btCollisionWorld::objectQuerySingle (ray/shape cast)",
+    0xAB4120: "Bullet: collision shape support (14-way shape switch)",
+    0xAC2DA0: "Bullet: dbvt tree traversal",
+    0xAB3E70: "Bullet: transform AABB",
+    0x2F2AD0: "clock: milliseconds",
 }
+
+# Leaves without a .pdata entry: hand-written or unwind-less code that the
+# range lookup cannot name. (start, end) -> description.
+RAW = [
+    (0x2C8A90, 0x2C8AA9, "script: class-chain walk (Cast / IsInherited / type check)"),
+    (0x2C8510, 0x2C8532, "script VM: variable slot address"),
+    (0x2C8540, 0x2C8554, "script VM: variable slot address"),
+]
 
 
 def main():
@@ -84,6 +101,11 @@ def main():
             rva = int(where, 16)
             i = bisect.bisect_right(starts, rva) - 1
             key = "unknown +0x%X" % rva
+            for lo, hi, what in RAW:
+                if lo <= rva < hi:
+                    key = "+0x%X  %s" % (lo, what)
+                    i = -1
+                    break
             if i >= 0:
                 b, e, _ = pd.entries[i]
                 if b <= rva < e:
