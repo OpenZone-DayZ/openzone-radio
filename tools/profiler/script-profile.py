@@ -131,6 +131,12 @@ class MODULEENTRY32W(ctypes.Structure):
                 ("szExePath", ctypes.c_wchar * 260)]
 
 
+class IO_COUNTERS(ctypes.Structure):
+    _fields_ = [("ReadOperationCount", ctypes.c_ulonglong), ("WriteOperationCount", ctypes.c_ulonglong),
+                ("OtherOperationCount", ctypes.c_ulonglong), ("ReadTransferCount", ctypes.c_ulonglong),
+                ("WriteTransferCount", ctypes.c_ulonglong), ("OtherTransferCount", ctypes.c_ulonglong)]
+
+
 class PROCESS_MEMORY_COUNTERS_EX(ctypes.Structure):
     _fields_ = [("cb", wt.DWORD), ("PageFaultCount", wt.DWORD),
                 ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
@@ -241,8 +247,13 @@ class Proc:
         k32.GetProcessHandleCount(self.h, ctypes.byref(hc))
         ft = [wt.FILETIME() for _ in range(4)]
         k32.GetProcessTimes(self.h, *[ctypes.byref(f) for f in ft])
+        # The process I/O counters include sockets: what the server sent to
+        # the players and read from them, plus file and device traffic.
+        io = IO_COUNTERS()
+        k32.GetProcessIoCounters(self.h, ctypes.byref(io))
         return {"private_mb": pm.PrivateUsage / 1048576.0, "ws_mb": pm.WorkingSetSize / 1048576.0,
-                "handles": hc.value, "cpu_s": _secs(ft[2]) + _secs(ft[3])}
+                "handles": hc.value, "cpu_s": _secs(ft[2]) + _secs(ft[3]),
+                "io_write": io.WriteTransferCount, "io_read": io.ReadTransferCount, "io_other": io.OtherTransferCount}
 
     def read(self, addr, n):
         """Up to the shared buffer's size; readn() for anything larger."""
@@ -715,18 +726,21 @@ class Sampler:
         return " " + n if n else ""
 
     # ---- reports ----------------------------------------------------------
-    def window_lines(self, stamp, seconds, hitches, stats, cpu_pct, top=8):
+    def window_lines(self, stamp, seconds, hitches, stats, cpu_pct, io_mb, top=8):
         """The one-minute block for the log, the row for windows.csv and the
-        rows for threads.csv."""
+        rows for threads.csv. io_mb = (written, read, other) megabytes this
+        window; sockets included, so 'written' is mostly what went to the players."""
         w = self.win
         pct = w.pct
         hit_ms = sum(r["ms"] for r in hitches)
         max_ms = max([r["ms"] for r in hitches] or [0])
         mods, _ = self.by_mod(w)
         head = ("%s  window %.0f s  %d samples | engine %.1f%%  script %.1f%%  natives %.1f%% | "
-                "hitches %d, %.0f ms, max %.0f ms | private %.0f MB  ws %.0f MB  handles %d  threads %d  cpu %.0f%%" % (
+                "hitches %d, %.0f ms, max %.0f ms | private %.0f MB  ws %.0f MB  handles %d  threads %d  cpu %.0f%% | "
+                "io out %.1f MB  in %.1f MB  other %.1f MB" % (
                     stamp, seconds, w.total, pct(w.engine), pct(w.interp), pct(w.native),
-                    len(hitches), hit_ms, max_ms, stats["private_mb"], stats["ws_mb"], stats["handles"], len(self.others) + 1, cpu_pct))
+                    len(hitches), hit_ms, max_ms, stats["private_mb"], stats["ws_mb"], stats["handles"], len(self.others) + 1, cpu_pct,
+                    io_mb[0], io_mb[1], io_mb[2]))
         mod_txt = "  ".join("%s %.1f%%" % (m, pct(c)) for m, c in mods.most_common(6))
         tops = w.self_cnt.most_common(top)
         top_txt = " | ".join("%s %.1f%%" % (self.names.get(F)[0], pct(c)) for F, c in tops)
@@ -762,7 +776,8 @@ class Sampler:
                len(hitches), "%.0f" % hit_ms, "%.0f" % max_ms, "%.0f" % stats["private_mb"], "%.0f" % stats["ws_mb"],
                stats["handles"], len(self.others) + 1, "%.0f" % cpu_pct,
                ";".join("%s=%.1f" % (m, pct(c)) for m, c in mods.most_common(6)),
-               ";".join("%s=%.1f" % (self.names.get(F)[0], pct(c)) for F, c in tops[:5])]
+               ";".join("%s=%.1f" % (self.names.get(F)[0], pct(c)) for F, c in tops[:5]),
+               "%.1f" % io_mb[0], "%.1f" % io_mb[1], "%.1f" % io_mb[2]]
         return lines, row, trows
 
     def rotate_window(self):
@@ -863,7 +878,8 @@ class Sampler:
 
 
 WINDOW_COLUMNS = ["time", "segment", "pid", "samples", "engine_pct", "interp_pct", "native_pct", "hitches", "hitch_ms",
-                  "max_hitch_ms", "private_mb", "ws_mb", "handles", "threads", "cpu_pct", "mods", "top"]
+                  "max_hitch_ms", "private_mb", "ws_mb", "handles", "threads", "cpu_pct", "mods", "top",
+                  "io_out_mb", "io_in_mb", "io_other_mb"]
 THREAD_COLUMNS = ["time", "segment", "pid", "tid", "name", "samples", "exe_pct", "cpu_ms", "top", "module", "stall_ms"]
 
 
@@ -970,8 +986,9 @@ def run_segment(a, pid, seg, deadline, files):
                 stats = p.stats()
                 wall = time.time()
                 cpu_pct = 100.0 * (stats["cpu_s"] - stats0["cpu_s"]) / max(1e-9, wall - wall0)
+                io_mb = tuple((stats[k] - stats0[k]) / 1048576.0 for k in ("io_write", "io_read", "io_other"))
                 stamp = time.strftime("%Y-%m-%d %H:%M:%S")
-                lines, row, trows = s.window_lines(stamp, wall - wall0, hit, stats, cpu_pct)
+                lines, row, trows = s.window_lines(stamp, wall - wall0, hit, stats, cpu_pct, io_mb)
                 if files:
                     files.say("\n".join(lines))
                     files.rows(files.windows, [[stamp, seg, pid] + row[1:]])

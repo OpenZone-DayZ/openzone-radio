@@ -88,6 +88,8 @@ public class DzScriptProfiler
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
     [DllImport("kernel32.dll")] static extern uint WaitForSingleObject(IntPtr h, uint ms);
     [DllImport("kernel32.dll")] static extern bool GetThreadTimes(IntPtr h, out long creation, out long exit, out long kernel, out long user);
+    [StructLayout(LayoutKind.Sequential)] struct IO_COUNTERS { public ulong ReadOps, WriteOps, OtherOps, ReadBytes, WriteBytes, OtherBytes; }
+    [DllImport("kernel32.dll")] static extern bool GetProcessIoCounters(IntPtr h, out IO_COUNTERS io);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern int GetThreadDescription(IntPtr h, out IntPtr desc);
     [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr p);
     [DllImport("winmm.dll")] static extern uint timeBeginPeriod(uint ms);
@@ -264,6 +266,9 @@ public class DzScriptProfiler
     }
     void Release(uint tid) { IntPtr th; if (threads.TryGetValue(tid, out th) && th != IntPtr.Zero) ResumeThread(th); }
     bool Alive() { return WaitForSingleObject(h, 0) == WAIT_TIMEOUT; }
+    // The process I/O counters include sockets: what the server sent to the
+    // players and read from them, plus file and device traffic.
+    double[] IoBytes() { IO_COUNTERS io; if (!GetProcessIoCounters(h, out io)) return new double[] { 0, 0, 0 }; return new double[] { io.WriteBytes, io.ReadBytes, io.OtherBytes }; }
     double ThreadCpu(uint tid)
     {
         IntPtr th = ThreadHandle(tid);
@@ -636,7 +641,7 @@ public class DzScriptProfiler
         }
         mods = SortedS(m);
     }
-    void WindowLines(string stamp, double seconds, List<Stretch> hitches, double cpuPct, out List<string> lines, out string row, out List<string> trows)
+    void WindowLines(string stamp, double seconds, List<Stretch> hitches, double cpuPct, double[] ioMb, out List<string> lines, out string row, out List<string> trows)
     {
         Counters w = win;
         proc.Refresh();
@@ -647,8 +652,8 @@ public class DzScriptProfiler
         List<KeyValuePair<string, int>> mods; Dictionary<string, int> modsNative;
         ByMod(w, out mods, out modsNative);
         lines = new List<string>();
-        lines.Add(F("{0}  window {1:F0} s  {2} samples | engine {3:F1}%  script {4:F1}%  natives {5:F1}% | hitches {6}, {7:F0} ms, max {8:F0} ms | private {9:F0} MB  ws {10:F0} MB  handles {11}  threads {12}  cpu {13:F0}%",
-            stamp, seconds, w.Total, w.Pct(w.Engine), w.Pct(w.Interp), w.Pct(w.NativeN), hitches.Count, hitMs, maxMs, privMb, wsMb, handles, others.Count + 1, cpuPct));
+        lines.Add(F("{0}  window {1:F0} s  {2} samples | engine {3:F1}%  script {4:F1}%  natives {5:F1}% | hitches {6}, {7:F0} ms, max {8:F0} ms | private {9:F0} MB  ws {10:F0} MB  handles {11}  threads {12}  cpu {13:F0}% | io out {14:F1} MB  in {15:F1} MB  other {16:F1} MB",
+            stamp, seconds, w.Total, w.Pct(w.Engine), w.Pct(w.Interp), w.Pct(w.NativeN), hitches.Count, hitMs, maxMs, privMb, wsMb, handles, others.Count + 1, cpuPct, ioMb[0], ioMb[1], ioMb[2]));
         List<string> mt = new List<string>(), mc = new List<string>();
         for (int i = 0; i < mods.Count && i < 6; i++) { mt.Add(F("{0} {1:F1}%", mods[i].Key, w.Pct(mods[i].Value))); mc.Add(F("{0}={1:F1}", mods[i].Key, w.Pct(mods[i].Value))); }
         List<KeyValuePair<long, int>> tops = Sorted(w.Self);
@@ -699,7 +704,7 @@ public class DzScriptProfiler
             lines.Add(F("   thread {0}{1} stood at +0x{2:X} for {3:F0} ms (from {4})", stalls[i].Key, TName(stalls[i].Key), stalls[i].Value.StallAtRip, stalls[i].Value.StallMs, stalls[i].Value.StallAt.ToString("HH:mm:ss", Inv)));
         row = string.Join(",", new string[] { stamp, w.Total.ToString(), F("{0:F1}", w.Pct(w.Engine)), F("{0:F1}", w.Pct(w.Interp)), F("{0:F1}", w.Pct(w.NativeN)),
             hitches.Count.ToString(), F("{0:F0}", hitMs), F("{0:F0}", maxMs), F("{0:F0}", privMb), F("{0:F0}", wsMb), handles.ToString(), (others.Count + 1).ToString(), F("{0:F0}", cpuPct),
-            Csv(string.Join(";", mc.ToArray())), Csv(string.Join(";", tc.ToArray())) });
+            Csv(string.Join(";", mc.ToArray())), Csv(string.Join(";", tc.ToArray())), F("{0:F1}", ioMb[0]), F("{0:F1}", ioMb[1]), F("{0:F1}", ioMb[2]) });
     }
     List<Stretch> RotateWindow()
     {
@@ -862,6 +867,7 @@ public class DzScriptProfiler
         List<Stretch> all = new List<Stretch>();
         Stopwatch clock = Stopwatch.StartNew();
         TimeSpan cpu0 = proc.TotalProcessorTime;
+        double[] io0 = IoBytes();
         DateTime wall0 = DateTime.Now, nextFlush = wall0.AddSeconds(windowSec);
         bool exited = false;
         while (DateTime.Now < deadline && !stopRequested)
@@ -880,9 +886,11 @@ public class DzScriptProfiler
                 TimeSpan cpu = TimeSpan.Zero;
                 try { proc.Refresh(); cpu = proc.TotalProcessorTime; } catch (Exception) { }
                 double cpuPct = 100.0 * (cpu - cpu0).TotalSeconds / Math.Max(1e-9, (wall - wall0).TotalSeconds);
+                double[] io1 = IoBytes();
+                double[] ioMb = new double[] { (io1[0] - io0[0]) / 1048576.0, (io1[1] - io0[1]) / 1048576.0, (io1[2] - io0[2]) / 1048576.0 };
                 string stamp = Stamp();
                 List<string> lines, trows; string row;
-                WindowLines(stamp, (wall - wall0).TotalSeconds, hit, cpuPct, out lines, out row, out trows);
+                WindowLines(stamp, (wall - wall0).TotalSeconds, hit, cpuPct, ioMb, out lines, out row, out trows);
                 if (prefix != null)
                 {
                     Append(prefix + ".log", string.Join("\n", lines.ToArray()));
@@ -895,7 +903,7 @@ public class DzScriptProfiler
                 }
                 all.AddRange(RotateWindow());
                 if (prefix != null) WriteCsvs(prefix, cum, seg, all);
-                cpu0 = cpu; wall0 = wall; nextFlush = wall.AddSeconds(windowSec);
+                cpu0 = cpu; io0 = io1; wall0 = wall; nextFlush = wall.AddSeconds(windowSec);
             }
         }
         CloseRun();
@@ -934,7 +942,7 @@ public class DzScriptProfiler
         {
             if (prefix != null)
             {
-                EnsureHeader(prefix + ".windows.csv", "time,segment,pid,samples,engine_pct,interp_pct,native_pct,hitches,hitch_ms,max_hitch_ms,private_mb,ws_mb,handles,threads,cpu_pct,mods,top");
+                EnsureHeader(prefix + ".windows.csv", "time,segment,pid,samples,engine_pct,interp_pct,native_pct,hitches,hitch_ms,max_hitch_ms,private_mb,ws_mb,handles,threads,cpu_pct,mods,top,io_out_mb,io_in_mb,io_other_mb");
                 EnsureHeader(prefix + ".hitches.csv", "time,segment,pid,ms,kind,description");
                 EnsureHeader(prefix + ".threads.csv", "time,segment,pid,tid,name,samples,exe_pct,cpu_ms,top,module,stall_ms");
                 Append(prefix + ".log", F("==== script-profile monitor started {0} (this machine's local time, UTC{1}): {2:F1} h, {3:F0} s windows, {4:F0} Hz main thread, {5:F0} Hz other threads, stretch threshold {6:F0} ms ====", Stamp(), DateTimeOffset.Now.ToString("zzz", Inv), hours, windowSec, hz, threadsHz, minRunMs));
