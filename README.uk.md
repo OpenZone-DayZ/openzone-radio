@@ -82,9 +82,9 @@ End тут лише приклад — годиться будь-яка віль
 
 | Мод | Вимагає | Ставити, коли |
 |---|---|---|
-| **`@OpenZone_Radio`** | лише Community Framework | Завжди. Це і є рація. |
-| `@OpenZone_Radio_PDA` | + OpenZone Core, OpenZone PDA | У вас OpenZone PDA і потрібна рація платою у відсіку приладу |
-| `@OpenZone_Radio_VPP` | + OpenZone VPP, VPPAdminTools | Потрібна адмінська вкладка для правки профілів у грі |
+| **[`@OpenZone_Radio`](https://steamcommunity.com/sharedfiles/filedetails/?id=3794105144)** | лише Community Framework | Завжди. Це і є рація. |
+| [`@OpenZone_Radio_PDA`](https://steamcommunity.com/sharedfiles/filedetails/?id=3798437416) | + OpenZone Core, OpenZone PDA | У вас OpenZone PDA і потрібна рація платою у відсіку приладу |
+| [`@OpenZone_Radio_VPP`](https://steamcommunity.com/sharedfiles/filedetails/?id=3798437535) | + OpenZone Core, OpenZone VPP, VPPAdminTools | Потрібна адмінська вкладка для правки профілів у грі |
 
 **`@OpenZone_Radio` не залежить від жодного нашого мода.** Перевірено бутом сервера з
 Community Framework і цим модом — без ядра, без КПК, без VPP:
@@ -121,7 +121,7 @@ Community Framework і цим модом — без ядра, без КПК, б�
 
 ```powershell
 cd native
-.\build.ps1 -Deploy -GameDir 'C:\шлях\до\DayZServer'
+.\build.ps1 -Deploy -TargetDir 'C:\шлях\до\DayZServer'
 ```
 
 Далі ефір. Файл, якому патч віддає перевагу, — це
@@ -182,6 +182,7 @@ profiles on disk did not parse ... fix `OZ_Radio_Profiles.json` and restart".
 | `SquelchRange` | За скільки метрів його чути. `15` за умовчанням |
 | `MirrorPtt` | Вішає вашу клавішу push-to-talk другою прив'язкою на клавішу голосу гри, щоб одне натискання робило обидва. `true` за умовчанням |
 | `PttFromCargo` | Чи може говорити рація в рюкзаку. `true` за умовчанням |
+| `DebugLog` | Докладний (рівня `Dbg`) лог самого мода. `false` за умовчанням |
 | `Profiler` | Дебаг-режим лагів: рахує, як часто спрацьовують шляхи цього мода, один рядок лога на хвилину, плюс самоперевірка на старті. `false` за умовчанням, вимкнений не коштує нічого |
 | `ProfilerRadios` | Лише для стендів. Коли `Profiler` увімкнено, ставить стільки живлених ванільних рацій на різних частотах поруч із першим гравцем онлайн, щоб навантажити голосову маршрутизацію рушія так, як повний сервер. `0` за умовчанням |
 
@@ -259,8 +260,10 @@ the engine's frequency table is not an even grid (8 bands) - radio profiles stay
    чи обгорнутим бінарником тепер називає себе в тому лозі, а не мовчить, — тож якщо
    файл є і в ньому `NOT PATCHED: loaded into "…"`, додайте `-server` до командного
    рядка.
-3. Лог, що закінчується на `NOT PATCHED: no match`, означає, що оновлення гри
-   пересунуло функцію.
+3. Лог, що починається з `NOT PATCHED: the frequency lookup's code shape is not
+   present`, означає, що оновлення гри пересунуло функцію. Лог, що починається з
+   `NOT PATCHED: the code shape matched` (більше ніж один раз), означає, що
+   бібліотека знайшла двох кандидатів і відмовилась вгадувати, котрий із них.
 
 ## Документація
 

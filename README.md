@@ -83,9 +83,9 @@ The repository builds **three separate mods**, and this matters when you install
 
 | Mod | Requires | Install it when |
 |---|---|---|
-| **`@OpenZone_Radio`** | Community Framework only | Always. This is the radio. |
-| `@OpenZone_Radio_PDA` | + OpenZone Core, OpenZone PDA | You run the OpenZone PDA and want the radio as a board in a device bay |
-| `@OpenZone_Radio_VPP` | + OpenZone VPP, VPPAdminTools | You want the admin tab for editing profiles in game |
+| **[`@OpenZone_Radio`](https://steamcommunity.com/sharedfiles/filedetails/?id=3794105144)** | Community Framework only | Always. This is the radio. |
+| [`@OpenZone_Radio_PDA`](https://steamcommunity.com/sharedfiles/filedetails/?id=3798437416) | + OpenZone Core, OpenZone PDA | You run the OpenZone PDA and want the radio as a board in a device bay |
+| [`@OpenZone_Radio_VPP`](https://steamcommunity.com/sharedfiles/filedetails/?id=3798437535) | + OpenZone Core, OpenZone VPP, VPPAdminTools | You want the admin tab for editing profiles in game |
 
 **`@OpenZone_Radio` depends on nothing of ours.** Verified by booting a server with
 Community Framework and this mod and nothing else — no Core, no PDA, no VPP:
@@ -123,7 +123,7 @@ Build and install it from [`native/README.md`](native/README.md):
 
 ```powershell
 cd native
-.\build.ps1 -Deploy -GameDir 'C:\path\to\DayZServer'
+.\build.ps1 -Deploy -TargetDir 'C:\path\to\DayZServer'
 ```
 
 Then set the band. The file the patch prefers is
@@ -186,6 +186,7 @@ its log rather than leaving the delay to be discovered.
 | `SquelchRange` | How far it is heard, in metres. `15` by default |
 | `MirrorPtt` | Adds your push-to-talk key as a second binding on the game's voice key, so one press does both. `true` by default |
 | `PttFromCargo` | Whether a radio in a backpack may speak. `true` by default |
+| `DebugLog` | This mod's own verbose (`Dbg`-level) logging. `false` by default |
 | `Profiler` | The lag debug mode: counts how often this mod's paths fire, one log line a minute, plus a self-check at start. `false` by default, and off costs nothing |
 | `ProfilerRadios` | Test stands only. With `Profiler` on, spawns this many powered vanilla radios on distinct frequencies next to the first player online, to load the engine's voice routing the way a full server does. `0` by default |
 
@@ -268,7 +269,10 @@ the whole time.
    launched under a renamed or wrapped binary now names itself in that log instead
    of failing in silence — so if the file exists and says `NOT PATCHED: loaded
    into "…"`, add `-server` to its command line.
-3. A log ending in `NOT PATCHED: no match` means a game update moved the function.
+3. A log beginning `NOT PATCHED: the frequency lookup's code shape is not present`
+   means a game update moved the function. One beginning `NOT PATCHED: the code
+   shape matched` (more than once) means it found two candidates and refused to
+   guess which one.
 
 ## Documentation
 
