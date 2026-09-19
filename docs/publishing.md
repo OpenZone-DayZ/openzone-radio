@@ -2,8 +2,8 @@
 
 **Published 2026-09-01:** https://steamcommunity.com/sharedfiles/filedetails/?id=3794105144
 
-Only `@OpenZone_Radio` is on the Workshop. What is ready, what is not, and what has to
-be decided by a person.
+All three mods are on the Workshop since 2026-09-09; the ids are in the Ready list. What
+is ready, what is not, and what has to be decided by a person.
 
 *Українською — нижче, у другій половині файла.*
 
@@ -15,10 +15,14 @@ be decided by a person.
 
 ## Ready
 
-- **Only `@OpenZone_Radio` goes to the Workshop.** Owner's decision 2026-09-01. The two
-  glue mods ship through this repository and nowhere else: their dependencies are hard,
-  so a subscriber without OpenZone Core and PDA would meet a blocking window before the
-  game loads. One Workshop item, three mods in git.
+- **All three mods are on the Workshop** since 2026-09-09:
+  [OZ_Radio](https://steamcommunity.com/sharedfiles/filedetails/?id=3794105144),
+  [OZ_Radio_PDA](https://steamcommunity.com/sharedfiles/filedetails/?id=3798437416),
+  [OZ_Radio_VPP](https://steamcommunity.com/sharedfiles/filedetails/?id=3798437535);
+  each `packaging/<Mod>/meta.cpp` carries its id. The glue mods' dependencies are hard,
+  so a subscriber needs OpenZone Core and OpenZone PDA from the Workshop too -- which is
+  why the 2026-09-01 decision to ship only `@OpenZone_Radio` was superseded (see above).
+  Three Workshop items, three mods in git.
 - **Signed.** Key `ZoneProtocol`, created 2026-09-01 with `DSCreateKey`. All three pbos
   carry `*.ZoneProtocol.bisign`, and `keys/ZoneProtocol.bikey` is placed inside every
   `@Mod` folder at build time, so a server running `verifySignatures = 2` can accept
@@ -125,10 +129,14 @@ The owner drives Publisher — the GUI tools are not run from here.
 
 ## Готове
 
-- **У Workshop іде ЛИШЕ `@OpenZone_Radio`.** Рішення власника 2026-09-01. Дві склейки
-  розповсюджуються через цей репозиторій і більше ніяк: їхні залежності жорсткі, тож
-  підписник без OpenZone Core і PDA дістав би блокуюче вікно ще до завантаження гри.
-  Один елемент Workshop, три моди в git.
+- **У Workshop усі три моди** з 2026-09-09:
+  [OZ_Radio](https://steamcommunity.com/sharedfiles/filedetails/?id=3794105144),
+  [OZ_Radio_PDA](https://steamcommunity.com/sharedfiles/filedetails/?id=3798437416),
+  [OZ_Radio_VPP](https://steamcommunity.com/sharedfiles/filedetails/?id=3798437535);
+  id кожного лежить у `packaging/<Mod>/meta.cpp`. Залежності склейок жорсткі, тож
+  підписнику потрібні ще OpenZone Core і OpenZone PDA з Workshop -- саме тому рішення
+  2026-09-01 «лише `@OpenZone_Radio`» скасовано (див. вище). Три елементи Workshop,
+  три моди в git.
 - **Підписано.** Ключ `ZoneProtocol`, створений 2026-09-01 через `DSCreateKey`. Усі три
   pbo несуть `*.ZoneProtocol.bisign`, а `keys/ZoneProtocol.bikey` кладеться в кожну теку
   `@Mod` під час збірки, тож сервер із `verifySignatures = 2` їх прийме. У git ключ
