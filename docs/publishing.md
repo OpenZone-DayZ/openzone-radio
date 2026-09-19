@@ -45,9 +45,11 @@ is ready, what is not, and what has to be decided by a person.
   writes `the engine's frequency table is not an even grid (8 bands) — radio profiles
   stay unapplied; this is what an unpatched server looks like`, and leaves vanilla
   alone. Nothing breaks; the operator simply gets eight channels.
-- **Workshop description** in English and Ukrainian, Steam BBCode, ready to paste:
-  [`workshop-description.md`](workshop-description.md). It warns about the native
-  library and links the repository, because the Workshop cannot carry a DLL.
+- **Workshop listings** in English and Ukrainian, Steam BBCode, one file per item beside
+  the packaging folders (`packaging/<Mod>.workshop.bbcode`;
+  [`workshop-description.md`](workshop-description.md) points there). They tell a server
+  owner that widening the band needs a server-side mod and link the repository for the
+  setup, because the Workshop cannot carry it.
 
 ## Not ready, and each needs a person
 
@@ -158,9 +160,11 @@ The owner drives Publisher — the GUI tools are not run from here.
   `the engine's frequency table is not an even grid (8 bands) — radio profiles stay
   unapplied; this is what an unpatched server looks like` і лишає ваніль недоторканою.
   Нічого не ламається; оператор просто отримує вісім каналів.
-- **Опис для Workshop** англійською та українською, у Steam BBCode, готовий до вставки:
-  [`workshop-description.md`](workshop-description.md). Він попереджає про нативну
-  бібліотеку й веде в репозиторій, бо DLL Workshop нести не може.
+- **Описи для Workshop** англійською та українською, у Steam BBCode, по файлу на предмет
+  поруч із теками packaging (`packaging/<Mod>.workshop.bbcode`;
+  [`workshop-description.md`](workshop-description.md) веде туди). Вони кажуть власнику
+  сервера, що для розширення ефіру потрібен серверний мод, і ведуть у репозиторій по
+  установку, бо Workshop нести його не може.
 
 ## Не готове, і кожне потребує людини
 

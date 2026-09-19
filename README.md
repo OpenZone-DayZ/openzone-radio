@@ -280,8 +280,8 @@ the whole time.
   the function, how to build it, what it refuses to do
 - [`docs/engine-frequency-table.md`](docs/engine-frequency-table.md) — what was measured
   in the binaries, and why the design looks like this
-- [`docs/workshop-description.md`](docs/workshop-description.md) — the Steam Workshop
-  text, English and Ukrainian
+- [`packaging/<Mod>.workshop.bbcode`](packaging/) — the Steam Workshop listing of each
+  item, English and Ukrainian in one field (`docs/workshop-description.md` points there)
 - [`docs/publishing.md`](docs/publishing.md) — what is ready to publish and what still
   needs a decision
 

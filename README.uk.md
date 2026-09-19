@@ -271,8 +271,9 @@ the engine's frequency table is not an even grid (8 bands) - radio profiles stay
   як зібрати, від чого відмовляється
 - [`docs/engine-frequency-table.md`](docs/engine-frequency-table.md) — що зміряно в
   бінарниках і чому конструкція саме така
-- [`docs/workshop-description.md`](docs/workshop-description.md) — текст для Steam
-  Workshop, англійською та українською
+- [`packaging/<Mod>.workshop.bbcode`](packaging/) — опис кожного предмета для Steam
+  Workshop, англійською та українською в одному полі (`docs/workshop-description.md`
+  веде туди)
 - [`docs/publishing.md`](docs/publishing.md) — що готове до публікації, а що ще
   потребує рішення
 
