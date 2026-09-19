@@ -1,19 +1,20 @@
-// OpenZone Radio -- the band system, and it stands on its own.
+// OpenZone Radio -- the band system.
 //
 // WHAT THIS PBO IS. The ether: how many channels exist, where they sit, who
-// hears whom, and push-to-talk. It needs nothing of ours -- a server that
-// wants nothing but handheld radios on a wider band installs this alone.
+// hears whom, and push-to-talk.
 //
 // WHAT IT IS NOT. The PDA board. The radio as a MODULE in a device bay lives
 // in @OpenZone_Radio_PDA, a separate pbo in this same repository, and that one
 // does require the PDA. The admin tab is the same story: @OpenZone_Radio_VPP.
 //
-// This header used to say "hard dependency on OpenZone_PDA, because the module
-// bays, the page registry and the antenna contract all live there". It was
-// true once and stopped being true when the glue moved out; requiredAddons
-// below has been the honest answer for a while, and a reader who trusted the
-// prose over the code would have concluded the mod cannot ship alone. It can:
-// booted 2026-09-01 against @CF and nothing else.
+// IT RUNS ON THE CORE (2026-09-20; the series' note
+// docs/specs/2026-09-20-radio-on-core-transport-design.md). Until then this
+// header said the mod "stands on its own" and booted against @CF alone --
+// true, and paid for with a second transport: seven CF RPCs of its own, a
+// client-side pull loop and a throttle, next to the core's envelope the glue
+// already used. The ether now rides the core's sync packet and tuning and
+// push-to-talk go through the core's service pair, so OpenZone_Core is a hard
+// dependency here, as everywhere else in the series.
 
 class CfgPatches
 {
@@ -22,23 +23,21 @@ class CfgPatches
         units[] = {};
         weapons[] = {};
         requiredVersion = 0.1;
-        // САМОСТІЙНИЙ. Ані ядра, ані КПК тут більше немає, і це не
-        // косметика: requiredAddons -- ЖОРСТКА залежність, тобто блокуюче
-        // вікно ще до завантаження. Сервер, якому потрібні лише ручні
-        // рації, платив би цим вікном за код, якого не використовує.
+        // Hard dependencies, and hard means a blocking window before the game
+        // loads rather than a silent skip. The core is one of them since
+        // 2026-09-20 (see the header). What knows about the PDA lives in
+        // @OpenZone_Radio_PDA and what knows about VPP in @OpenZone_Radio_VPP:
+        // separate pbos of this repository that require both sides hard and
+        // are installed only when both run.
         //
-        // Все, що знає про КПК, живе в @OpenZone_Radio_PDA -- окремому pbo
-        // з цього ж репозиторію, який вимагає обидва боки жорстко й
-        // ставиться лише тоді, коли крутять обидва. Те саме з адмінською
-        // вкладкою: @OpenZone_Radio_VPP.
-        //
-        // CF лишається: модуль мода -- CF_ModuleWorld, і RPC ходять через
-        // GetRPCManager().
+        // CF stays: the module is a CF_ModuleWorld, and the core's envelope
+        // rides CF's RPCManager.
         requiredAddons[] =
         {
             "DZ_Data",
             "DZ_Scripts",
             "JM_CF_Scripts",
+            "OpenZone_Core",
             // Ним оголошений personalradio_staticnoise_SoundShader, від якого
             // успадковується наш сплеск. Без цього рядка базовий клас при
             // бінаризації просто не знайдеться -- і не мовчки: конфіг не

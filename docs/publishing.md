@@ -32,11 +32,11 @@ is ready, what is not, and what has to be decided by a person.
   > somewhere outside this repository.** Losing it means every future release is signed
   > by a different key, and every server that installed the old `.bikey` has to replace
   > it. Anyone who obtains it can sign a mod as you.
-- **`@OpenZone_Radio` stands alone.** Verified, not assumed: a server booted with
-  Community Framework and this mod and nothing else — no Core, no PDA, no VPP, no glue —
-  and reported `radio loaded: bands=8 profiles=11` with zero errors. `requiredAddons`
-  names only `DZ_Data`, `DZ_Scripts`, `JM_CF_Scripts`, and every script symbol in the
-  pbo lives in its own `OZR_` namespace.
+- **`@OpenZone_Radio` runs on OpenZone Core** (since 2026-09-20; before that it stood
+  alone on Community Framework, verified by a boot with nothing else). `requiredAddons`
+  names `DZ_Data`, `DZ_Scripts`, `JM_CF_Scripts` and `OpenZone_Core`; every script symbol
+  in the pbo still lives in its own `OZR_` namespace, and the wire is the core's: the
+  ether rides the sync packet, tuning and push-to-talk the service pair.
 - **`mod.cpp` in all three mods.** Without it DayZ shows the bare folder name and
   nothing else — no author, no version, no description. Each one names its hard
   dependencies in the description, so a server owner learns about them before the
@@ -148,11 +148,11 @@ The owner drives Publisher — the GUI tools are not run from here.
   > поза цим репозиторієм.** Втратити його означає, що кожен наступний випуск підписаний
   > іншим ключем, і кожен сервер, який поставив старий `.bikey`, мусить його замінити.
   > Хто його дістане, зможе підписувати моди вашим ім'ям.
-- **`@OpenZone_Radio` самостійний.** Перевірено, а не припущено: сервер піднято з
-  Community Framework і цим модом — без ядра, КПК, VPP і склейок — і він відзвітував
-  `radio loaded: bands=8 profiles=11` без жодної помилки. У `requiredAddons` лише
-  `DZ_Data`, `DZ_Scripts`, `JM_CF_Scripts`, а всі скриптові імена pbo живуть у власному
-  просторі `OZR_`.
+- **`@OpenZone_Radio` працює на OpenZone Core** (з 2026-09-20; до того він стояв сам на
+  Community Framework, що перевірено бутом без нічого іншого). У `requiredAddons` —
+  `DZ_Data`, `DZ_Scripts`, `JM_CF_Scripts` і `OpenZone_Core`; усі скриптові імена pbo,
+  як і раніше, живуть у власному просторі `OZR_`, а провід — ядерний: ефір їде пакетом
+  синхронізації, настройка й PTT — парою служби.
 - **`mod.cpp` в усіх трьох модах.** Без нього DayZ показує голу назву теки й більше
   нічого — ні автора, ні версії, ні опису. Кожен називає свої жорсткі залежності в
   описі, щоб власник сервера дізнався про них до блокуючого вікна, а не з нього.

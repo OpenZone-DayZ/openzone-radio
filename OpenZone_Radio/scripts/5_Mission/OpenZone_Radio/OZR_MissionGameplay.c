@@ -1,7 +1,8 @@
 // Клієнтська точка входу мода рації.
 //
-// Дві речі, і обидві -- через договір КПК, а не правкою його файлів: сказати
-// фабриці сторінок, хто малює «Рацію», і почати опитувати клавішу PTT.
+// Три речі, і всі -- через договори сусідів, а не правкою їхніх файлів:
+// почати опитувати клавіші PTT і клавіатури, слухати пакет синхронізації ядра
+// (у ньому їде ефір, див. OZR_ClientSync) і відповіді служби «radio».
 //
 // На виділеному сервері MissionGameplay не створюється взагалі (там
 // MissionServer), тож цей код туди просто не потрапляє.
@@ -16,8 +17,26 @@ modded class MissionGameplay
         OZR_FreqInput.Init();
         OZR_Von.Watch();
 
+        // Ефір -- із пакета синхронізації ядра, на кожен пакет (перший і
+        // повторний), і одразу, якщо пакет випередив місію; відмови служби --
+        // тостом. Той самий візерунок, що в КПК (OZ_PdaMissionGameplay).
+        OZ_ClientState.SyncWatch().Insert(OZR_Sync);
+        OZ_ClientState.ServiceWatch().Insert(OZR_SvcRes);
+        if (OZ_ClientState.Ready())
+            OZR_ClientSync.Apply();
+
         // Дзеркалення НЕ тут: воно залежить від налаштування, яке ще їде з
         // сервера. Кличеться з OZR_Audio, коли пакет приїхав.
+    }
+
+    void OZR_Sync(OZ_SyncPayload p)
+    {
+        OZR_ClientSync.Apply();
+    }
+
+    void OZR_SvcRes(string serviceId, string op, bool ok, string json, string error)
+    {
+        OZR_ClientSync.OnServiceResponse(serviceId, op, ok, json, error);
     }
 
     override void OnUpdate(float timeslice)
@@ -62,6 +81,11 @@ modded class MissionGameplay
     // відкритим. Тому мовчання вмикаємо самі.
     override void OnMissionFinish()
     {
+        // Дзеркало підписок з OnInit: інвокери ядра статичні й переживуть
+        // місію, а місія -- ні.
+        OZ_ClientState.SyncWatch().Remove(OZR_Sync);
+        OZ_ClientState.ServiceWatch().Remove(OZR_SvcRes);
+
         OZR_Ptt.Drop();
         OZR_FreqInput.Drop();
         OZR_Von.Unwatch();

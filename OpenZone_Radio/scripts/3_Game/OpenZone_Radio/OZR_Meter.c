@@ -24,10 +24,9 @@ class OZR_Meter
     static const int WORK_OFF = 3;   // a radio powered down
     static const int SPEAK    = 4;   // OZR_SetSpeaking: an EnableBroadcast edge
     static const int KNOB     = 5;   // vanilla SetNextFrequency (the tune action)
-    static const int GRID     = 6;   // a client asked for the ether (13 RPCs back)
-    static const int TUNE     = 7;   // a keypad tune request
-    static const int PTT      = 8;   // a PTT edge from a client
-    static const int COUNT    = 9;
+    static const int TUNE     = 6;   // a keypad tune request (the core's service pair)
+    static const int PTT      = 7;   // a PTT edge from a client (the same pair)
+    static const int COUNT    = 8;
 
     private static bool s_On = false;
 
@@ -126,7 +125,6 @@ class OZR_Meter
             case WORK_OFF: return "power-off";
             case SPEAK:    return "air";
             case KNOB:     return "knob";
-            case GRID:     return "grid-req";
             case TUNE:     return "tune-req";
             case PTT:      return "ptt";
         }

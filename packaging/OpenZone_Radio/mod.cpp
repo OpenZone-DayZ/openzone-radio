@@ -20,7 +20,7 @@ version     = "0.1";
 // needs a native library, and a DLL is not something the Workshop hosts. A
 // server owner who installs this and sees eight channels must be able to find
 // out why WITHOUT reading the log first -- so the answer is here too.
-description = "Radio channels beyond the vanilla eight. Needs a server-side native library from the repository to widen the band -- without it the mod runs and leaves the vanilla eight alone. github.com/covalschi/openzone-radio";
+description = "Radio channels beyond the vanilla eight. Requires Community Framework and OpenZone Core. Needs a server-side native library from the repository to widen the band -- without it the mod runs and leaves the vanilla eight alone. github.com/covalschi/openzone-radio";
 
 tooltip     = "OpenZone Radio";
-overview    = "DayZ ships with eight radio frequencies. This makes it as many as you configure. Any server, any map, configured from JSON. Widening the band needs a server-side native library from the repository; clients need nothing.";
+overview    = "DayZ ships with eight radio frequencies. This makes it as many as you configure. Any server, any map, configured from JSON. Requires OpenZone Core. Widening the band needs a server-side native library from the repository; clients need nothing.";

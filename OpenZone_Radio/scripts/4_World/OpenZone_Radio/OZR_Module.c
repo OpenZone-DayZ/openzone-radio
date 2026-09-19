@@ -14,6 +14,14 @@
 //
 // Порядок значущий цілком: профілі перевіряються проти ВИМІРЯНОЇ таблиці, а
 // ефір виводиться з профілів.
+//
+// ВЛАСНИХ RPC ТУТ БІЛЬШЕ НЕМАЄ (2026-09-20, спека серії
+// 2026-09-20-radio-on-core-transport-design). Ефір їде клієнтові додатком до
+// пакета синхронізації ядра (OZR_EtherServer.Fill -> OZ_Sync), настройка й
+// гашетка приходять парою служби ядра (OZR_Service). Разом із сімома CF-RPC
+// пішли тяга сітки з клієнта, троттл на неї та лічильник GRID: ядро тягне
+// свій пакет саме тоді, коли клієнт готовий його прийняти (OZ_Rpc.Hello), і
+// робить це для всієї родини один раз.
 
 [CF_RegisterModule(OZR_Module)]
 class OZR_Module : CF_ModuleWorld
@@ -28,8 +36,8 @@ class OZR_Module : CF_ModuleWorld
         EnableMissionStart();
         EnableMissionFinish();
 
-        // Рядок гравця в лічильнику запитів іде з ним. Без цього мапа росла б
-        // на кожного, хто хоч раз спитав сітку, і не зменшувалась ніколи.
+        // Стан гашетки гравця йде з ним. Без цього мапа росла б на кожного,
+        // хто хоч раз натиснув клавішу, і не зменшувалась ніколи.
         EnableInvokeDisconnect();
     }
 
@@ -46,22 +54,6 @@ class OZR_Module : CF_ModuleWorld
             OZR_Throttle.Forget(dArgs.UID);
     }
 
-    // Клієнтський бік: тягне сітку і тримає таймер, поки не дотягне.
-    private ref Timer m_PullTimer;
-    private int m_PullsLeft = 0;
-    private static const float PULL_INTERVAL = 2.0;
-
-    // ДВІ ХВИЛИНИ, а не двадцять секунд. Тяга починається з OnMissionStart --
-    // тобто ще під час завантаження, задовго до того, як гравець опиниться у
-    // світі: на цьому стенді від старту місії до входу минає близько хвилини,
-    // і всі перші пакети йдуть у нікуди, бо каналу ще немає. Десяти спроб на
-    // це не вистачало, і сітка не приїжджала зовсім -- сторінка чесно писала
-    // «сервер ще не сказав», а виглядало це як поломка.
-    //
-    // Ціна помилитись у другий бік -- один крихітний пакет на дві секунди,
-    // і лише поки сітки немає. Тому запас великий.
-    private static const int   PULL_TRIES    = 60;
-
     // Таймери дебаг-режиму лагів; див. OZR_Meter і OZR_LoadTest. Заводяться
     // лише коли Profiler увімкнено, тож вимкнений режим не має навіть таймера.
     private ref Timer m_MeterTimer;
@@ -74,33 +66,21 @@ class OZR_Module : CF_ModuleWorld
     {
         super.OnMissionStart(sender, args);
 
-        // Клієнт ТЯГНЕ сам, а не чекає, поки штовхнуть. Причина та сама, що
-        // записана в ядрі поруч із OZ_Rpc.Hello(): серверний хук на конекті
-        // спрацьовує раніше, ніж клієнт устигає зареєструвати обробник, і
-        // пакет іде в нікуди. Тяга від порядку не залежить.
-        if (GetGame().IsClient())
-        {
-            GetRPCManager().AddRPC(OZR_Const.MOD, OZR_Const.RPC_GRID_RES, this, SingleplayerExecutionType.Client);
-            GetRPCManager().AddRPC(OZR_Const.MOD, OZR_Const.RPC_PROF_RES, this, SingleplayerExecutionType.Client);
-            GetRPCManager().AddRPC(OZR_Const.MOD, OZR_Const.RPC_AUDIO_RES, this, SingleplayerExecutionType.Client);
-            GetRPCManager().AddRPC(OZR_Const.MOD, OZR_Const.RPC_TUNE_RES, this, SingleplayerExecutionType.Client);
-
-            m_PullsLeft = PULL_TRIES;
-            m_PullTimer = new Timer(CALL_CATEGORY_SYSTEM);
-            m_PullTimer.Run(PULL_INTERVAL, this, "PullTick", NULL, true);
-            PullTick();
-        }
-
+        // Клієнтської половини тут більше немає: ефір приїздить пакетом ядра,
+        // і приймає його OZR_ClientSync із modded MissionGameplay.
         if (!GetGame().IsServer())
             return;
 
-        GetRPCManager().AddRPC(OZR_Const.MOD, OZR_Const.RPC_GRID_REQ, this, SingleplayerExecutionType.Server);
-        GetRPCManager().AddRPC(OZR_Const.MOD, OZR_Const.RPC_TUNE,     this, SingleplayerExecutionType.Server);
-        GetRPCManager().AddRPC(OZR_Const.MOD, OZR_Const.RPC_PTT,      this, SingleplayerExecutionType.Server);
+        // Настройка й гашетка -- служба в реєстрі ядра; ефір -- додаток до
+        // його пакета синхронізації. Обидві реєстрації до будь-якого читання:
+        // порядок CF-модулів не гарантований, але перший клієнт з'явиться в
+        // будь-якому разі пізніше за всі OnMissionStart.
+        OZ_ServiceRegistry.Register(OZR_Const.SERVICE, new OZR_Service());
+        OZ_SyncExtras.OnFill().Insert(OZR_EtherFill);
 
-        // ПЕРЕД БУДЬ-ЯКИМ ЗАПИСОМ. Каталог профілю створює лише ядро, а рація
-        // його не вимагає: на сервері з одним нашим pbo кожен Save мовчки
-        // провалювався б, і разом із ним -- публікація сітки частот.
+        // ПЕРЕД БУДЬ-ЯКИМ ЗАПИСОМ. Каталог профілю будує ядро, але порядок
+        // CF-модулів не гарантований, і без цього рядка кожен Save мовчки
+        // провалювався б -- разом із публікацією сітки частот.
         OZR_Const.EnsureProfileDir();
 
         // Найперше: рівень діагностики стоїть саме тут, і рядки нижче вже
@@ -144,16 +124,26 @@ class OZR_Module : CF_ModuleWorld
         }
     }
 
+    // Що рація докладає до пакета синхронізації ядра. Кличе інвокер
+    // OZ_SyncExtras на кожну відправку -- на вході гравця й на розсилку після
+    // адмінської правки, -- тому метод мусить бути видимим (не private).
+    void OZR_EtherFill(OZ_SyncPayload p)
+    {
+        OZR_EtherServer.Fill(p);
+    }
+
     override void OnMissionFinish(Class sender, CF_EventArgs args)
     {
         super.OnMissionFinish(sender, args);
 
-        if (m_PullTimer)
-            m_PullTimer.Stop();
         if (m_MeterTimer)
             m_MeterTimer.Stop();
         if (m_LoadTimer)
             m_LoadTimer.Stop();
+
+        // Дзеркало підписки з OnMissionStart: інвокер ядра статичний і
+        // переживе місію, а модуль, що підписався, -- ні.
+        OZ_SyncExtras.OnFill().Remove(OZR_EtherFill);
 
         // Рації-підсилювачі не переживають місію: інакше стенд, який падає
         // замість зупинки, лишав би їх на землі до наступного разу.
@@ -178,30 +168,6 @@ class OZR_Module : CF_ModuleWorld
             m_LoadTimer.Stop();
     }
 
-    // Просимо сітку, поки не отримаємо. Спроби скінченні: якщо сервер не
-    // відповідає, це не привід сипати пакетами до кінця сесії -- підпис
-    // просто лишиться порожнім, і це чесніше за вигадане число.
-    void PullTick()
-    {
-        if (OZR_ClientGrid.Ready() || m_PullsLeft <= 0)
-        {
-            if (m_PullTimer)
-                m_PullTimer.Stop();
-            return;
-        }
-
-        m_PullsLeft--;
-        if (m_PullsLeft == 0)
-            OZR_Log.Warn("the ether never arrived from the server after " + PULL_TRIES.ToString() + " tries - frequencies will show as unknown");
-
-        // ПОРОЖНІЙ Param, і саме порожній. CF вимагає якийсь Param, тож він
-        // тут є; але возив він SCHEMA_PROFILES, а обробник на сервері не
-        // читає з контексту жодного байта. Номер схеми на дроті без читача --
-        // це обіцянка узгодження версій, якого немає, і наступний читач цього
-        // коду шукав би, де воно перевіряється. Нуль не обіцяє нічого.
-        GetRPCManager().SendRPC(OZR_Const.MOD, OZR_Const.RPC_GRID_REQ, new Param1<int>(0), true);
-    }
-
     // Гравець за особою відправника -- ОДНИМ СТРИБКОМ.
     //
     // Тут стояв обхід усього онлайну зі звіркою рядків GetId(): «іншого
@@ -215,128 +181,16 @@ class OZR_Module : CF_ModuleWorld
     // гравця тепер дає порожньо, а не його НОВЕ тіло. Для обробника пакета це
     // й є правильна відповідь -- відкривати рацію тому, хто цього пакета не
     // слав, не треба.
-    private PlayerBase OZR_PlayerOf(PlayerIdentity who)
+    //
+    // Статичні -- ними користується служба (OZR_Service), а стану модуля їм
+    // не треба.
+    static PlayerBase OZR_PlayerOf(PlayerIdentity who)
     {
         if (!who)
             return null;
 
         return PlayerBase.Cast(who.GetPlayer());
     }
-
-    // ----------------------------------------------------------------- RPC
-    //
-    // Ім'я методу мусить збігатися з рядком у AddRPC посимвольно, метод --
-    // не статичний, і саме з цими чотирма параметрами в цьому порядку.
-
-    void OZR_GridReq(CallType type, ParamsReadContext ctx, PlayerIdentity sender, Object target)
-    {
-        if (type != CallType.Server || !sender)
-            return;
-
-        // Рахуємо ПРИХІД, а не пропуск через межу: дріт навантажує кожен
-        // пакет, і саме їх треба бачити в лічильнику.
-        OZR_Meter.Hit(OZR_Meter.GRID);
-
-        if (!OZR_Throttle.Allow(sender, "grid"))
-            return;
-
-        // ЛОГУЄМО, бо без цього рядка «сітка не приїхала» не має жодного
-        // сліду в жодному лозі: ретейл-клієнт не пише скриптових рядків у
-        // .RPT ЗОВСІМ (перевірено 2026-08-31: нуль рядків SCRIPT за сесію),
-        // тож єдине місце, де видно цей обмін, -- серверний бік.
-        if (OZR_Log.IsDebug())
-            OZR_Log.Dbg("ether asked for by " + sender.GetName());
-
-        OZR_EtherServer.SendTo(sender);
-    }
-
-    // Пряма настройка на ділення. Клієнт присилає ЧИСЛО, і воно не має жодної
-    // ваги, поки сервер не перевірив його проти профілю тієї рації, яка
-    // справді в руках у цього гравця. Інакше клавіатура частот була б
-    // способом сісти на чужу смугу, минаючи і профіль, і саму рацію.
-    void OZR_TuneReq(CallType type, ParamsReadContext ctx, PlayerIdentity sender, Object target)
-    {
-        if (type != CallType.Server || !sender)
-            return;
-
-        // Міряється з кінця в кінець для дебаг-режиму лагів; тіло незмінне.
-        int mt = OZR_Meter.Begin();
-        OZR_TuneReqBody(ctx, sender);
-        OZR_Meter.End(OZR_Meter.TUNE, mt);
-    }
-
-    private void OZR_TuneReqBody(ParamsReadContext ctx, PlayerIdentity sender)
-    {
-        Param1<int> p = new Param1<int>(0);
-        if (!ctx.Read(p))
-            return;
-
-        PlayerBase player = OZR_PlayerOf(sender);
-        if (!player || !player.GetHumanInventory())
-        {
-            OZR_Log.Dbg("tune refused: no player for this identity");
-            return;
-        }
-
-        TransmitterBase radio = TransmitterBase.Cast(player.GetHumanInventory().GetEntityInHands());
-        if (!radio)
-        {
-            OZR_Log.Dbg("tune refused: nothing that transmits in hands");
-            OZR_TuneRefused(sender, "STR_OZR_ERR_NO_RADIO_HANDS");
-            return;
-        }
-
-        if (!radio.OZR_IsPowered())
-        {
-            OZR_Log.Dbg("tune refused: the radio is switched off");
-            OZR_TuneRefused(sender, "STR_OZR_ERR_SWITCHED_OFF");
-            return;
-        }
-
-        OZR_RadioProfile prof = OZR_Profiles.For(radio.GetType());
-        if (!prof || !OZR_Grid.Ready())
-        {
-            // Info, не Dbg (ТЗ-5 R-E3.2): без цього рядка адмін не відрізнить
-            // «сітка не виведена» від «клієнт не отримав».
-            OZR_Log.Info("tune refused for " + sender.GetName() + ": no profile for " + radio.GetType() + " or the grid is not even");
-            OZR_TuneRefused(sender, "STR_OZR_NOT_INIT");
-            return;
-        }
-
-        int want = p.param1;
-        int lo;
-        int hi;
-        int stride;
-        if (!OZR_Grid.Window(prof, lo, hi, stride))
-        {
-            OZR_Log.Dbg("tune refused: " + radio.GetType() + " does not overlap the running ether at all - restart the server");
-            OZR_TuneRefused(sender, "STR_OZR_ERR_NO_OVERLAP");
-            return;
-        }
-
-        if (want < lo || want > hi)
-        {
-            OZR_Log.Dbg("tune refused: index " + want.ToString() + " is outside " + lo.ToString() + ".." + hi.ToString());
-            OZR_TuneRefused(sender, "STR_OZR_KEYPAD_OUT");
-            return;
-        }
-
-        // Ділення мусить лежати на ґратці САМОГО профілю, а не просто в його
-        // межах: інакше рація стане між своїми каналами й не зустріне нікого.
-        if (((want - lo) % stride) != 0)
-        {
-            OZR_Log.Dbg("tune refused: index " + want.ToString() + " is between this set's own channels");
-            OZR_TuneRefused(sender, "STR_OZR_ERR_OFF_STEP_SET");
-            return;
-        }
-
-        // Через OZR_TuneTo, а не SetFrequencyByIndex: він же й розкаже про
-        // нову частоту клієнтові. Прямий виклик лишив би її невидимою.
-        radio.OZR_TuneTo(want);
-
-        OZR_Log.Dbg("tuned " + radio.GetType() + " to index " + want.ToString() + " = " + OZR_Grid.MHzAt(want).ToString() + " MHz");
-    }
-
 
     // Кнопка «говорити» на ручних рацій.
     //
@@ -366,55 +220,11 @@ class OZR_Module : CF_ModuleWorld
     //
     // Ванільних і чужих передавачів обхід не чіпає в обидва боки: їхній ефір
     // цей мод не відкривав, і закривати його теж не його справа.
-    void OZR_PttRadio(CallType type, ParamsReadContext ctx, PlayerIdentity sender, Object target)
-    {
-        if (type != CallType.Server || !sender)
-            return;
-
-        // Міряється з кінця в кінець для дебаг-режиму лагів; тіло незмінне.
-        int mt = OZR_Meter.Begin();
-        OZR_PttRadioBody(ctx, sender);
-        OZR_Meter.End(OZR_Meter.PTT, mt);
-    }
-
-    private void OZR_PttRadioBody(ParamsReadContext ctx, PlayerIdentity sender)
-    {
-        Param2<bool, bool> p = new Param2<bool, bool>(false, false);
-        if (!ctx.Read(p))
-            return;
-
-        // Обхід усього інвентаря на кожен край -- і саме тому межа. Але межа
-        // ПО ЗМІНІ, не по часу: тут стояв той самий півсекундний проміжок, що
-        // й на сітці, і він з'їдав край відпускання короткого клацання разом
-        // із його сплеском (див. OZR_Throttle). Дублікат відкинути можна --
-        // край не можна ніколи.
-        if (!OZR_Throttle.Changed(sender, p.param1, p.param2))
-            return;
-
-        PlayerBase player = OZR_PlayerOf(sender);
-        if (!player || !player.GetInventory())
-            return;
-
-        int touched = OZR_SetAll(player, p.param1, p.param2);
-
-        if (OZR_Log.IsDebug())
-        {
-            string said = "ptt: " + sender.GetName();
-            if (p.param1)
-                said += " opens ";
-            else
-                said += " shuts ";
-            said += touched.ToString() + " radio(s)";
-            if (p.param2)
-                said += " (latched)";
-            OZR_Log.Dbg(said);
-        }
-    }
-
+    //
     // Скільки передавачів перемкнули. Число повертається не для краси: «нуль»
     // -- це єдине, чим відрізняється «гравець натиснув кнопку без рації» від
     // «пакет не дійшов», і без нього обидва випадки виглядають у лозі однаково.
-    private int OZR_SetAll(PlayerBase player, bool on, bool locked)
+    static int OZR_SetAll(PlayerBase player, bool on, bool locked)
     {
         array<EntityAI> items = new array<EntityAI>();
         if (!player.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, items))
@@ -463,7 +273,7 @@ class OZR_Module : CF_ModuleWorld
     // «остання в руках» не має відповіді взагалі; відмовити тут означало б
     // зробити кнопку мертвою до першого перекладання. Тому без пам'яті
     // говорить перша ж рація на слоті.
-    private TransmitterBase OZR_PickSpeaker(PlayerBase player, array<EntityAI> items)
+    static TransmitterBase OZR_PickSpeaker(PlayerBase player, array<EntityAI> items)
     {
         bool cargo = false;
         OZR_Settings st = OZR_Settings.Get();
@@ -504,92 +314,5 @@ class OZR_Module : CF_ModuleWorld
         }
 
         return best;
-    }
-
-    // Відмова на настройку -- гравцеві, ключем (D103). Лише відмови: удачу
-    // видно на самій рації, коли приїде синхрозмінна.
-    private void OZR_TuneRefused(PlayerIdentity to, string key)
-    {
-        if (!to || key == "")
-            return;
-        GetRPCManager().SendRPC(OZR_Const.MOD, OZR_Const.RPC_TUNE_RES, new Param1<string>(key), true, to);
-    }
-
-    void OZR_TuneRes(CallType type, ParamsReadContext ctx, PlayerIdentity sender, Object target)
-    {
-        if (type != CallType.Client)
-            return;
-        Param1<string> p = new Param1<string>("");
-        if (!ctx.Read(p))
-            return;
-        OZR_Log.Info("tune refused by the server: " + p.param1);
-        OZR_Say.Toast(p.param1);
-    }
-
-    void OZR_GridRes(CallType type, ParamsReadContext ctx, PlayerIdentity sender, Object target)
-    {
-        if (type != CallType.Client)
-            return;
-
-        Param3<float, float, int> p = new Param3<float, float, int>(0, 0, 0);
-        if (!ctx.Read(p))
-            return;
-
-        OZR_ClientGrid.SetGrid(p.param1, p.param2, p.param3);
-
-        if (OZR_ClientGrid.Ready())
-        {
-            string got = "ether received: " + p.param3.ToString() + " divisions from ";
-            got += OZR_Fmt.MHz(p.param1) + " MHz by " + OZR_Fmt.Step(p.param2);
-            OZR_Log.Info(got);
-        }
-        else
-        {
-            // Не збій зв'язку, а відповідь: сервер каже, що ефіру немає.
-            // Сказати це прямо треба тому, що зовні воно виглядає точно так
-            // само, як пакет, який не доїхав.
-            OZR_Log.Warn("no ether: the server reports no even frequency grid - radios stay vanilla and the keypad will not open");
-        }
-
-        if (m_PullTimer)
-            m_PullTimer.Stop();
-    }
-
-    void OZR_AudioRes(CallType type, ParamsReadContext ctx, PlayerIdentity sender, Object target)
-    {
-        if (type != CallType.Client)
-            return;
-
-        Param5<float, bool, int, bool, bool> p = new Param5<float, bool, int, bool, bool>(1.0, true, OZR_Const.SQUELCH_RANGE_DEFAULT, true, false);
-        if (!ctx.Read(p))
-            return;
-
-        // НАЙПЕРШЕ: рядки нижче вже мусять на нього зважати -- той самий
-        // порядок, що на сервері в OnMissionStart. До цієї миті клієнтський
-        // OZR_Log.Dbg не писав нічого й ніде (див. OZR_EtherServer.SendTo).
-        OZR_Log.SetDebug(p.param5);
-
-        OZR_Audio.SetGains(p.param1, p.param2, p.param3, p.param4);
-
-        string got = "audio: squelch x" + p.param1.ToString();
-        got += " within " + OZR_Audio.SquelchRung().ToString() + " m";
-        got += ", mirror ptt onto the voice key = " + p.param2.ToString();
-        got += ", ptt from cargo = " + p.param4.ToString();
-        // Рівень діагностики -- у ТОМУ САМОМУ рядку: без нього «чому в лозі
-        // немає squelch» не має відповіді, яку видно.
-        got += ", debug log = " + p.param5.ToString();
-        OZR_Log.Info(got);
-    }
-
-    void OZR_ProfRes(CallType type, ParamsReadContext ctx, PlayerIdentity sender, Object target)
-    {
-        if (type != CallType.Client)
-            return;
-
-        Param4<string, float, float, float> p = new Param4<string, float, float, float>("", 0, 0, 0);
-        if (!ctx.Read(p))
-            return;
-
-        OZR_ClientGrid.AddProfile(p.param1, p.param2, p.param3, p.param4);
     }
 }

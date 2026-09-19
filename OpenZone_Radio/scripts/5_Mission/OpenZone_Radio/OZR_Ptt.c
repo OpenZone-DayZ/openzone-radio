@@ -253,10 +253,25 @@ class OZR_Ptt
         OZR_PttHud.Set(mode);
     }
 
-    // Ручна рація: свій RPC, бо це не сторінка КПК і предмет тут інший.
+    // Ручна рація: пара СЛУЖБИ ядра, а не сторінка КПК -- прилад тут інший, і
+    // ворота приладу до нього не стосуються. Два біти їдуть маленьким JSON
+    // (OZR_PttWire); слова true/false складаються гілкою, а не ToString():
+    // форму на проводі задає JSON, а не те, як рушій друкує bool.
     private static void Send(bool on, bool locked)
     {
-        GetRPCManager().SendRPC(OZR_Const.MOD, OZR_Const.RPC_PTT, new Param2<bool, bool>(on, locked), true);
+        string json = "{\"On\":";
+        if (on)
+            json += "true";
+        else
+            json += "false";
+        json += ",\"Locked\":";
+        if (locked)
+            json += "true";
+        else
+            json += "false";
+        json += "}";
+
+        OZ_Rpc.ServiceRequest(OZR_Const.SERVICE, OZR_Const.OP_PTT, json);
 
         // Info, щоб рядок стояв у КЛІЄНТСЬКОМУ лозі поруч із «von: ...».
         // Дві половини однієї клавіші -- наша й ванільна -- інакше живуть у

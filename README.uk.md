@@ -82,16 +82,15 @@ End тут лише приклад — годиться будь-яка віль
 
 | Мод | Вимагає | Ставити, коли |
 |---|---|---|
-| **[`@OpenZone_Radio`](https://steamcommunity.com/sharedfiles/filedetails/?id=3794105144)** | лише Community Framework | Завжди. Це і є рація. |
+| **[`@OpenZone_Radio`](https://steamcommunity.com/sharedfiles/filedetails/?id=3794105144)** | Community Framework, OpenZone Core | Завжди. Це і є рація. |
 | [`@OpenZone_Radio_PDA`](https://steamcommunity.com/sharedfiles/filedetails/?id=3798437416) | + OpenZone Core, OpenZone PDA | У вас OpenZone PDA і потрібна рація платою у відсіку приладу |
 | [`@OpenZone_Radio_VPP`](https://steamcommunity.com/sharedfiles/filedetails/?id=3798437535) | + OpenZone Core, OpenZone VPP, VPPAdminTools | Потрібна адмінська вкладка для правки профілів у грі |
 
-**`@OpenZone_Radio` не залежить від жодного нашого мода.** Перевірено бутом сервера з
-Community Framework і цим модом — без ядра, без КПК, без VPP:
-
-```
-[OpenZone/Radio] radio loaded: bands=8 profiles=11
-```
+**`@OpenZone_Radio` працює на OpenZone Core.** До 2026-09-20 він стояв сам на Community
+Framework — ціною другого транспорту: сім власних RPC, клієнтська тяга й троттл поруч
+із конвертом ядра, яким склейки вже ходили. Тепер ефір їде пакетом синхронізації ядра,
+а настройка й PTT — парою служби ядра, тож ядро тут жорстка залежність, як і всюди в
+серії.
 
 Решта два — склейки. Свої залежності вони оголошують **жорстко**, а це в DayZ означає
 блокуюче вікно ще до завантаження гри, а не тихий пропуск, — тож ставте склейку лише
@@ -100,6 +99,7 @@ Community Framework і цим модом — без ядра, без КПК, б�
 ## Вимоги
 
 - [Community Framework](https://steamcommunity.com/sharedfiles/filedetails/?id=1559212036)
+- [OpenZone Core](https://steamcommunity.com/sharedfiles/filedetails/?id=3798432022)
 - Для ефіру ширшого за ванільний — нативна бібліотека нижче, **на сервері**.
 
 Клієнтам не потрібно нічого, крім самого мода. Частоту вирішує сервер, тож звичайний

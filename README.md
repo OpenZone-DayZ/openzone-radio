@@ -83,16 +83,15 @@ The repository builds **three separate mods**, and this matters when you install
 
 | Mod | Requires | Install it when |
 |---|---|---|
-| **[`@OpenZone_Radio`](https://steamcommunity.com/sharedfiles/filedetails/?id=3794105144)** | Community Framework only | Always. This is the radio. |
+| **[`@OpenZone_Radio`](https://steamcommunity.com/sharedfiles/filedetails/?id=3794105144)** | Community Framework, OpenZone Core | Always. This is the radio. |
 | [`@OpenZone_Radio_PDA`](https://steamcommunity.com/sharedfiles/filedetails/?id=3798437416) | + OpenZone Core, OpenZone PDA | You run the OpenZone PDA and want the radio as a board in a device bay |
 | [`@OpenZone_Radio_VPP`](https://steamcommunity.com/sharedfiles/filedetails/?id=3798437535) | + OpenZone Core, OpenZone VPP, VPPAdminTools | You want the admin tab for editing profiles in game |
 
-**`@OpenZone_Radio` depends on nothing of ours.** Verified by booting a server with
-Community Framework and this mod and nothing else — no Core, no PDA, no VPP:
-
-```
-[OpenZone/Radio] radio loaded: bands=8 profiles=11
-```
+**`@OpenZone_Radio` runs on OpenZone Core.** Until 2026-09-20 it stood alone on Community
+Framework, at the price of a second transport: seven RPCs of its own, a client-side pull
+loop and a throttle next to the core's envelope the glue mods already used. The ether now
+rides the core's sync packet, and tuning and push-to-talk go through the core's service
+pair, so the core is a hard dependency here as everywhere else in the series.
 
 The other two are glue. They declare their dependencies **hard**, which in DayZ means a
 blocking window before the game loads rather than a silent skip — so install a glue mod
@@ -101,6 +100,7 @@ only together with what it glues to.
 ## Requirements
 
 - [Community Framework](https://steamcommunity.com/sharedfiles/filedetails/?id=1559212036)
+- [OpenZone Core](https://steamcommunity.com/sharedfiles/filedetails/?id=3798432022)
 - For a band wider than vanilla: the native library below, **on the server**.
 
 Clients need nothing beyond the mod itself. The frequency table is resolved on the
