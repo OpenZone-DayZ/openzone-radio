@@ -293,11 +293,6 @@ distinct frequencies from 86 to 152 MHz where the engine had eight (2026-09-02; 
 same probe reads the vanilla eight on an unpatched server, which is how the two states
 are told apart).
 
-**Not yet proven:** that two players eight indices apart are separate *conversations*.
-The frequencies are distinct and the router keys on the frequency's bytes, so the
-remaining risk is small — but distinct values are not the same as having heard the
-separation.
-
 ## Licence
 
 CC BY-NC-SA 4.0, plus two additional permissions in [NOTICE](NOTICE):
