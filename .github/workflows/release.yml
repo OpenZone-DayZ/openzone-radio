@@ -1,0 +1,72 @@
+# A tag proxy-v* becomes a GitHub release with the frequency proxy, built
+# here. The prefix keeps this apart from the mod's own versions: the DLL and
+# the pbo ship on their own clocks, and one tag namespace for both would say
+# the radio is at 1.0 because its proxy is.
+#
+# The proxy is a native DLL, so the release is not a copy of anything from a
+# developer's machine: the runner compiles it from native/src with the same
+# build.ps1 an admin would run, and uploads what came out. The build script
+# finds the toolchain with vswhere, which windows-latest already carries.
+name: release
+
+on:
+  push:
+    tags: ['proxy-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: build the proxy
+        shell: pwsh
+        run: .\native\build.ps1
+
+      # What an admin needs beside the DLL: the frequencies it reads, and the
+      # page that says where the file goes and where it must NOT go.
+      - name: assemble the release folder
+        shell: pwsh
+        run: |
+          $ver  = "${{ github.ref_name }}" -replace '^proxy-', ''
+          $name = "openzone-frequency-proxy-$ver-win64"
+          New-Item -ItemType Directory -Force -Path "dist\$name" | Out-Null
+          Copy-Item native\build\hid.dll          "dist\$name\"
+          Copy-Item native\oz_frequencies.json    "dist\$name\"
+          Copy-Item native\README.md              "dist\$name\"
+          Copy-Item LICENSE, NOTICE               "dist\$name\"
+          Compress-Archive -Path "dist\$name\*" -DestinationPath "dist\$name.zip" -Force
+          Get-Item "dist\$name.zip" | ForEach-Object { "packed $($_.Name), $([math]::Round($_.Length/1KB)) KB" }
+
+      # The hash goes in the notes: an unsigned DLL off the internet deserves
+      # at least a number the admin can check against the file they downloaded.
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $zip = (Get-ChildItem dist -Filter '*.zip' | Select-Object -First 1).FullName
+          $sha = (Get-FileHash $zip -Algorithm SHA256).Hash
+          $notes = @"
+          Server-side native mod that raises DayZ's eight radio channels to a number set in JSON.
+
+          Built by this workflow from ``native/src`` on windows-latest, not uploaded from anyone's machine.
+
+          **Where it goes.** Beside the DayZ **server** executable, with ``oz_frequencies.json`` next to it. It patches the process only when that process was launched with ``-server`` or is named ``DayZServer_x64.exe``.
+
+          **Where it must not go.** Not into a directory you play retail DayZ from. It patches nothing there thanks to the gate above, but BattlEye blocks an unsigned DLL and says so in the launcher.
+
+          ``README.md`` inside the archive has the rest, including what is patched and why.
+
+          SHA256 of the archive: ``$sha``
+          "@
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            $ver = $tag -replace '^proxy-', ''
+            gh release create $tag --title "OpenZone frequency proxy $ver" --notes $notes
+          }
+          gh release upload $tag $zip --clobber
