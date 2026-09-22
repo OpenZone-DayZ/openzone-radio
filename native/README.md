@@ -175,15 +175,6 @@ same `hid.dll` from the same directory and added no line to the log, leaving its
 own table vanilla. That is the shipping configuration — patched server, stock
 client — and the client connected and played normally in it.
 
-### What is still unproven
-
-That two players on indices 0 and 8 are separate **conversations**. The
-frequencies are now distinct and the router keys on the frequency's four bytes
-(see the research notes), so the remaining risk is small — but distinct values
-are not the same as having heard the separation. The test is two players, two
-handheld radios, eight presses of "tune" apart: before the patch both are `87.8`
-and they hear each other, after it they must not.
-
 ## Note on a shared game directory
 
 The proxy is deployed beside the game executable, which on this machine is the
