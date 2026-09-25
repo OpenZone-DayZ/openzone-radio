@@ -27,7 +27,7 @@ class OZR_Profiles : OZR_ConfigBase
         return OZR_Const.SCHEMA_PROFILES;
     }
 
-    // Одна смуга на всі одинадцять класів. Дальність кожного стоїть у
+    // Одна смуга на всі сім класів. Дальність кожного стоїть у
     // config.cpp його класу (рушій читає її звідти й нізвідки більше); тут --
     // лише ефір, і він у всіх той самий.
     //
@@ -46,12 +46,8 @@ class OZR_Profiles : OZR_ConfigBase
         Version = LatestVersion();
         Radios  = new array<ref OZR_RadioProfile>();
 
-        Add("OZ_Radio_50m",    BAND_LO, BAND_HI, BAND_STEP);
-        Add("OZ_Radio_100m",   BAND_LO, BAND_HI, BAND_STEP);
-        Add("OZ_Radio_200m",   BAND_LO, BAND_HI, BAND_STEP);
         Add("OZ_Radio_250m",   BAND_LO, BAND_HI, BAND_STEP);
         Add("OZ_Radio_500m",   BAND_LO, BAND_HI, BAND_STEP);
-        Add("OZ_Radio_750m",   BAND_LO, BAND_HI, BAND_STEP);
         Add("OZ_Radio_1000m",  BAND_LO, BAND_HI, BAND_STEP);
         Add("OZ_Radio_2000m",  BAND_LO, BAND_HI, BAND_STEP);
         Add("OZ_Radio_5000m",  BAND_LO, BAND_HI, BAND_STEP);

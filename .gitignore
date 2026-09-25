@@ -38,3 +38,19 @@ dayz-mcp.local.*.toml
 
 # Python caches from tools/profiler
 __pycache__/
+
+# Моделі рацій (models/). Корінь збірки моделей: MLOD і посилання на data\ та ванільний dz\
+# (див. dayz-mcp.toml, [build] project_root) -- похідне, збирається заново.
+build/model-root/
+models/build/
+# Проміжне конвеєра моделей: відтворюється скриптами models/assets/<рація>/scripts, і в git
+# воно дало б дві копії, що розходяться. Що йде в мод (.p3d, .paa, .rvmat, model.cfg), лежить
+# в OpenZone_Radio/model/ і комітиться. Виняток -- .blend: збірка зберігає сцену кожної рації
+# (<рація>_high.blend -- детальна модель, <рація>_game.blend -- лоди в грі), щоб її можна було
+# відкрити в Blender без прогону скриптів.
+models/assets/*/work/*
+!models/assets/*/work/*.blend
+models/assets/*/textures/
+# Чужий рендер, лежить на цій машині лише як візуальний референс.
+models/assets/*/reference_*
+*.blend1

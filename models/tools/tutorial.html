@@ -1,0 +1,308 @@
+<!doctype html>
+<!-- Туториал раций для игроков. Шаблон: данные (лица, клавиши, линейку) подставляет
+     tools/render_tutorial.py вместо DATA и снимает страницу headless Chrome. -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Рации OpenZone</title>
+<style>
+:root {
+  --bg: #17191d; --panel: #20242a; --line: #30353d; --ink: #eceae4; --mute: #a3a7ae; --dim: #767b83;
+  --tape: #e3d3a4; --tape-ink: #2b2620; --amber: #f2b441;
+  --digit: rgb(79,195,247); --step: rgb(255,213,79); --go: rgb(102,187,106);
+  --back: rgb(239,83,80); --close: rgb(186,104,200); --dot: rgb(236,236,236);
+}
+* { box-sizing: border-box; }
+body { margin: 0; width: 1920px; background: var(--bg); color: var(--ink);
+  font-family: Bahnschrift, "Segoe UI", sans-serif; font-size: 23px; line-height: 1.35; }
+.wrap { padding: 64px 72px 40px; }
+b { color: #fff; font-weight: 600; }
+
+/* плашка с рукописной подписью - оформление заголовков страницы */
+.tape { display: inline-block; background: var(--tape); color: var(--tape-ink); padding: 4px 22px 6px;
+  font-family: "Segoe Print", cursive; font-weight: 700; font-size: 25px; transform: rotate(-2deg);
+  box-shadow: 0 2px 6px rgba(0,0,0,.35);
+  clip-path: polygon(0 8%, 3% 0, 97% 4%, 100% 0, 99% 92%, 96% 100%, 4% 96%, 0 100%); }
+
+h1 { font-weight: 700; font-stretch: condensed; font-size: 104px; line-height: 1.02; margin: 22px 0 18px;
+  letter-spacing: .5px; text-transform: uppercase; }
+h2 { font-weight: 700; font-stretch: condensed; font-size: 58px; line-height: 1; margin: 0;
+  text-transform: uppercase; letter-spacing: .5px; }
+.lead { color: var(--mute); font-size: 26px; max-width: 700px; margin: 0; }
+
+.key { display: inline-block; min-width: 1.9em; padding: .05em .45em .12em; margin: 0 .08em;
+  border-radius: .28em; background: linear-gradient(#f4f2ec, #cfccc4); color: #1b1c1f; font-weight: 700;
+  text-align: center; box-shadow: 0 .16em 0 #7d7a73, 0 .22em .4em rgba(0,0,0,.5); line-height: 1.2; }
+.key.big { font-size: 38px; }
+.chip { display: inline-block; padding: 0 .4em; border: 2.5px solid; border-radius: .3em; font-weight: 600;
+  line-height: 1.25; margin: 0 .06em; white-space: nowrap; }
+
+/* ---- шапка: заголовок и четыре шага слева, линейка справа ---- */
+.hero { display: flex; gap: 32px; align-items: center; }
+.hero-l { width: 780px; flex: none; }
+.hero-r { flex: 1; position: relative; }
+.steps { margin-top: 34px; display: grid; gap: 14px; }
+.step { display: grid; grid-template-columns: 64px 1fr 170px; gap: 20px; align-items: center;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px; }
+.num { width: 58px; height: 58px; border-radius: 50%; background: var(--amber); color: #1d1a12;
+  font-weight: 700; font-size: 34px; display: grid; place-items: center; }
+.step h3 { margin: 0 0 2px; font-size: 30px; font-weight: 700; font-stretch: semi-condensed; text-transform: uppercase; }
+.step p { margin: 0; color: var(--mute); font-size: 21px; }
+.step .ico { display: grid; place-items: center; }
+.lineup { position: relative; overflow: hidden;
+  background: radial-gradient(ellipse closest-side at 56% 58%, #2e343c 0%, #23272d 55%, var(--bg) 100%); }
+.lineup img { position: absolute; }
+.cap { position: absolute; transform: translateX(-50%); text-align: center; white-space: nowrap; }
+.cap .m { font-weight: 600; font-size: 22px; }
+.cap .r { font-family: "Segoe Print", cursive; font-weight: 700; color: var(--tape); font-size: 22px; }
+.note-r { color: var(--mute); font-size: 21px; text-align: right; margin-top: 6px; }
+
+/* ---- разделы ---- */
+section { margin-top: 64px; }
+.sh { display: flex; align-items: center; gap: 22px; margin-bottom: 14px; }
+.sub { color: var(--mute); font-size: 24px; margin: 0 0 26px; max-width: 1500px; }
+
+.faces { display: flex; align-items: flex-start; justify-content: space-between; }
+.group { display: flex; flex-direction: column; }
+.group > .gl { font-size: 24px; font-weight: 600; color: var(--amber); border-bottom: 2px solid #4a4030;
+  padding-bottom: 8px; margin-bottom: 18px; text-align: center; }
+.group > .row { display: flex; gap: 26px; align-items: flex-start; }
+.fbox { display: flex; align-items: flex-end; justify-content: center; }
+.col { display: flex; flex-direction: column; align-items: center; }
+.face { position: relative; }
+.face img { width: 100%; height: 100%; display: block; }
+.hk { position: absolute; border: 3px solid; border-radius: 22%;
+  box-shadow: 0 0 9px currentColor, inset 0 0 6px currentColor; }
+.hk.round { border-radius: 50%; }
+.hk.cross { background: #1a1a1c; box-shadow: 0 0 9px currentColor; }
+.hk.cross::before, .hk.cross::after { content: ""; position: absolute; left: 22%; right: 22%; top: 50%;
+  height: 3px; margin-top: -1.5px; background: #eee; transform: rotate(45deg); }
+.hk.cross::after { transform: rotate(-45deg); }
+.fname { margin-top: 14px; font-size: 27px; font-weight: 700; font-stretch: semi-condensed; }
+.fname .r { font-family: "Segoe Print", cursive; color: var(--tape); font-size: 22px; margin-left: 6px; }
+.how { margin-top: 6px; font-size: 20px; color: var(--mute); text-align: center; line-height: 1.75; }
+.how div { max-width: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px 40px; margin-top: 34px; font-size: 21px; color: var(--mute); }
+.legend span.sw { display: inline-block; width: 36px; height: 22px; border: 3px solid; border-radius: 6px;
+  vertical-align: -4px; margin-right: 10px; box-shadow: 0 0 7px currentColor; }
+.facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 30px; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 24px 28px; }
+.card h4 { margin: 0 0 10px; font-size: 27px; font-weight: 700; font-stretch: semi-condensed;
+  text-transform: uppercase; color: #fff; }
+.card p { margin: 0 0 10px; color: var(--mute); }
+.card p:last-child { margin-bottom: 0; }
+.air { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 22px; }
+.hud { display: inline-flex; align-items: center; gap: 12px; background: rgba(14,15,18,.75);
+  padding: 8px 16px 8px 10px; border-radius: 4px; font-size: 20px; color: #fff; letter-spacing: .3px;
+  border: 1px solid #3a3f47; }
+.hud svg { width: 34px; height: 34px; }
+.huds { display: flex; gap: 20px; margin: 6px 0 14px; align-items: center; }
+.huds small { color: var(--dim); font-size: 18px; display: block; margin-top: 4px; text-align: center; }
+ol.chain { margin: 4px 0 12px; padding-left: 0; list-style: none; counter-reset: c; }
+ol.chain li { counter-increment: c; margin: 8px 0; color: var(--ink); }
+ol.chain li::before { content: counter(c); display: inline-grid; place-items: center; width: 34px; height: 34px;
+  border-radius: 50%; border: 2px solid var(--amber); color: var(--amber); font-weight: 700; margin-right: 12px; }
+ol.chain li small { color: var(--dim); font-size: 19px; }
+
+.band { margin-top: 8px; }
+.bar { position: relative; height: 54px; border-radius: 10px; margin: 58px 10px 16px;
+  background: linear-gradient(90deg, #2c4a57, #3a6d80 50%, #2c4a57); border: 1px solid #4d7f91; }
+.tick { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.22); }
+.pin { position: absolute; top: -52px; transform: translateX(-50%); text-align: center; font-size: 19px;
+  color: var(--mute); white-space: nowrap; }
+.pin b { display: block; font-size: 23px; }
+.pin::after { content: ""; display: block; width: 2px; height: 12px; background: var(--amber); margin: 3px auto 0; }
+.ends { display: flex; justify-content: space-between; margin: 0 10px; color: var(--mute); font-size: 22px; }
+.ends b { font-size: 30px; }
+.tips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+.foot { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--dim);
+  font-size: 18px; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ======================= шапка ======================= -->
+<div class="hero">
+  <div class="hero-l">
+    <span class="tape">инструкция</span>
+    <h1>Как пользоваться<br>рацией</h1>
+    <p class="lead">Шесть моделей на одной сетке частот. Разница только в дальности:
+      она написана в описании рации.</p>
+    <div class="steps">
+      <div class="step"><div class="num">1</div>
+        <div><h3>Батарейка</h3><p>Вставь батарейку <b>9V</b> в рацию: перетащи её на рацию в инвентаре.</p></div>
+        <div class="ico"><svg width="120" height="74" viewBox="0 0 120 74"><rect x="4" y="16" width="112" height="54" rx="7" fill="#2d3238" stroke="#8c939c" stroke-width="3"/><rect x="4" y="16" width="36" height="54" rx="7" fill="#c9a23c"/><rect x="22" y="4" width="18" height="12" rx="2" fill="#aeb4bb"/><path d="M76 4h22v12H76z" fill="#aeb4bb"/><text x="78" y="53" fill="#eceae4" font-family="Bahnschrift" font-weight="700" font-size="24" text-anchor="middle">9V</text></svg></div></div>
+      <div class="step"><div class="num">2</div>
+        <div><h3>Включи</h3><p>Возьми рацию в руки и нажми <b>ЛКМ</b>: действие «Включить».</p></div>
+        <div class="ico"><svg width="62" height="92" viewBox="0 0 62 92"><rect x="3" y="3" width="56" height="86" rx="28" fill="#2d3238" stroke="#8c939c" stroke-width="3"/><path d="M31 3v34M3 37h56" stroke="#8c939c" stroke-width="3"/><path d="M5 35V31A26 26 0 0 1 29.5 5.1V35z" fill="#f2b441"/></svg></div></div>
+      <div class="step"><div class="num">3</div>
+        <div><h3>Частота</h3><p>Рация в руках и включена: <b>K</b> открывает окно частоты с лицом твоей рации.</p></div>
+        <div class="ico"><span class="key big">K</span></div></div>
+      <div class="step"><div class="num">4</div>
+        <div><h3>Говори</h3><p>Держи <b>Caps Lock</b> и говори. Дважды быстро — замок, рация говорит без рук.</p></div>
+        <div class="ico"><span class="key big" style="font-size:27px">Caps Lock</span></div></div>
+    </div>
+  </div>
+  <div class="hero-r">
+    <div class="lineup" id="lineup"></div>
+  </div>
+</div>
+
+<!-- ======================= частота ======================= -->
+<section>
+  <div class="sh"><span class="tape">клавиша K</span><h2>Настройка частоты</h2></div>
+  <p class="sub">Окно — это лицо рации, что у тебя в руках. Кликай мышью по её кнопкам. Клавиатура остаётся игре:
+    с открытым окном можно бежать. Закрыть окно: <span class="key">K</span>, <span class="key">Esc</span>
+    или крестик в углу. Окно можно перетащить за корпус, место запоминается.</p>
+  <div class="faces" id="faces"></div>
+  <div class="legend" id="legend"></div>
+  <div class="facts">
+    <div class="card"><h4>Экран</h4><p>У рации с цифрами сверху частота, на которой она стоит, снизу то, что
+      набираешь. У Шептуна и Базара крупно номер канала, мелко его частота.</p></div>
+    <div class="card"><h4>Точка ставится сама</h4><p>Набери <span class="key">1</span><span class="key">4</span><span class="key">5</span><span class="key">5</span>,
+      и на экране будет <b>145.5</b>. Подтверди, и рация встанет на 145.500.</p></div>
+    <div class="card"><h4>Мимо сетки</h4><p>Частоты идут через 0.05 МГц. Если частота вне диапазона, окно
+      напишет «Поза діапазоном цієї рації». Набери заново.</p></div>
+  </div>
+</section>
+
+<!-- ======================= эфир ======================= -->
+<section>
+  <div class="sh"><span class="tape">Caps Lock</span><h2>Эфир</h2></div>
+  <div class="air">
+    <div class="card"><h4>Говорить</h4>
+      <p>Держи <span class="key">Caps Lock</span>. Тебя слышно и вслух, и в рацию. Пока идёт передача, справа
+        на экране горит значок:</p>
+      <div class="huds">
+        <div><div class="hud"><svg viewBox="0 0 32 32"><path d="M9 2v8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><rect x="6" y="9" width="18" height="21" rx="3" fill="none" stroke="#fff" stroke-width="2.4"/><rect x="10" y="13" width="10" height="6" rx="1" fill="#fff"/><path d="M10 23h10M10 26h10" stroke="#fff" stroke-width="2"/></svg>В ЕФІРІ</div><small>держишь клавишу</small></div>
+        <div><div class="hud"><svg viewBox="0 0 32 32"><path d="M9 2v8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><rect x="6" y="9" width="18" height="21" rx="3" fill="none" stroke="#fff" stroke-width="2.4"/><rect x="10" y="13" width="10" height="6" rx="1" fill="#fff"/><path d="M10 23h10M10 26h10" stroke="#fff" stroke-width="2"/></svg>ЗАБЛОКОВАНО</div><small>замок</small></div>
+      </div>
+      <p><b>Замок:</b> нажми Caps Lock дважды быстро, и рация продолжит передавать без рук. Любое следующее
+        нажатие снимает замок. Не забывай его: открытый эфир выдаёт всю группу.</p></div>
+    <div class="card"><h4>Какая рация говорит</h4>
+      <p>Передаёт всегда одна рация, первая по списку:</p>
+      <ol class="chain">
+        <li>в руках</li>
+        <li>на лямке рюкзака</li>
+        <li>в рюкзаке или кармане <small>(если сервер разрешил)</small></li>
+      </ol>
+      <p>Если две рации в одном месте, говорит та, что ты держал в руках последней.</p></div>
+    <div class="card"><h4>Кто тебя слышит</h4>
+      <p>Все включённые рации на той же частоте, до которых достаёт связь.</p>
+      <p><b>Принимает любая включённая рация</b>, даже на дне рюкзака. Выключенная не слышит ничего.</p>
+      <p>Дальность написана в описании рации: от <b>250 м</b> у Шептуна до <b>10 км</b> у Кристала.</p></div>
+  </div>
+</section>
+
+<!-- ======================= сетка ======================= -->
+<section>
+  <div class="sh"><span class="tape">136–156 МГц</span><h2>Частоты и каналы</h2></div>
+  <p class="sub">У всех раций одна полоса: <b>136.000–155.950 МГц</b> с шагом <b>0.05</b>, это <b>400 каналов</b>.
+    Любые две рации могут встать на одну частоту. У Шептуна и Базара на экране номер канала, так что договаривайтесь по этой шкале:</p>
+  <div class="band"><div class="bar" id="bar"></div>
+    <div class="ends"><span><b>136.000</b> · канал 1</span>
+      <span>канал N = 136.000 + 0.05 × (N − 1) · каждые 20 каналов = 1 МГц</span>
+      <span>канал 400 · <b>155.950</b></span></div></div>
+</section>
+
+<!-- ======================= полезно ======================= -->
+<section>
+  <div class="sh"><span class="tape">полезно знать</span></div>
+  <div class="tips">
+    <div class="card"><h4>Своя кнопка для рации</h4><p>Настройки → Управление → OpenZone → «Рація: натиснути й
+      говорити». После перезахода новая клавиша включает и голос, и эфир, а Caps Lock остаётся только голосом рядом.</p></div>
+    <div class="card"><h4>Брошенная рация</h4><p>Бросил рацию, пока держал Caps Lock, и она замолчит. Бросил её
+      на замке, и она продолжит вещать. Смерть снимает замок сама.</p></div>
+    <div class="card"><h4>Батарейка и вход</h4><p>Села батарейка — рация молчит и не слышит, замок снимается.
+      Рация, которая была в руках, после перезахода выключена: включи её снова.</p></div>
+  </div>
+</section>
+
+<div class="foot"><span>OpenZone Radio · Zone Protocol  —  модели раций: OpenZone Radio Models · CC BY-NC-SA 4.0</span>
+  <span>Полоса и разрешения — по умолчанию; админ сервера может настроить иначе.</span></div>
+</div>
+
+<script>
+const DATA = /*DATA*/null;
+const C = DATA.colors;
+const NAMES = {
+  pmr_t388: ["Шептун", "250 м"], lxt: ["Базар", "500 м"], uv5r: ["Балаболка", "1 км"],
+  uvs9: ["Скриня", "2 км"], xts: ["Терран", "5 км"], prc152: ["Кристал", "10 км"] };
+const chip = (role, t) => `<span class="chip" style="color:${C[role]};border-color:${C[role]}">${t}</span>`;
+const HOW = {
+  pmr_t388: [`${chip("step", "▼")} ${chip("step", "▲")} соседний канал`, `сразу; ${chip("close", "●")} красная — выйти`],
+  lxt: [`${chip("step", "▼")} ${chip("step", "▲")} соседний канал`, `сразу, без подтверждения`],
+  uv5r: [`${chip("digit", "1 4 5 5")} → ${chip("go", "MENU")}`, `${chip("back", "EXIT")} стереть / выйти`,
+         `${chip("step", "▲▼")} соседний → ${chip("go", "MENU")}`],
+  uvs9: [`${chip("digit", "1 4 5 5")} → ${chip("go", "MENU")}`, `${chip("back", "EXIT")} стереть / выйти`,
+         `${chip("step", "▲▼")} соседний → ${chip("go", "MENU")}`],
+  xts: [`${chip("digit", "1 4 5 5")} → ${chip("go", "↵")} справа`, `${chip("back", "#")} стереть / выйти`,
+        `${chip("step", "джойстик ▲▼")} соседний`, `${chip("close", "слева")} выйти`],
+  prc152: [`${chip("digit", "1 4 5 5")} → ${chip("go", "ENT")}`, `${chip("back", "CLR")} ${chip("back", "◄")} стереть / выйти`,
+           `${chip("step", "PRE + −")} соседний`] };
+const GROUPS = [["Без цифр: стрелки сразу меняют канал", ["pmr_t388", "lxt"]],
+                ["С цифрами: набери частоту и подтверди", ["uv5r", "uvs9", "xts", "prc152"]]];
+
+// ---- лица: один масштаб на все, как окна в игре (они примерно одной высоты)
+const faces = document.getElementById("faces");
+const avail = 1776, gapCol = 26, gapGroup = 60, colMin = 262;
+const all = Object.values(DATA.faces);
+let maxH = 0;
+let s = 600 / Math.max(...all.map(f => f.h));
+const widthAt = k => GROUPS.reduce((a, [, rs]) => a + rs.reduce((b, r) => b + Math.max(DATA.faces[r].w * k, colMin), 0)
+  + gapCol * (rs.length - 1), 0) + gapGroup;
+for (let i = 0; i < 60 && widthAt(s) > avail; i++) s *= 0.98;   // колонки не уже colMin: без предела цикл вечный
+maxH = Math.max(...all.map(f => f.h)) * s;
+for (const [label, rs] of GROUPS) {
+  const g = document.createElement("div"); g.className = "group";
+  g.innerHTML = `<div class="gl">${label}</div><div class="row"></div>`;
+  const row = g.querySelector(".row");
+  for (const r of rs) {
+    const f = DATA.faces[r], w = f.w * s, h = f.h * s;
+    const col = document.createElement("div"); col.className = "col"; col.style.width = Math.max(w, colMin) + "px";
+    let keys = "";
+    for (const k of f.keys) {
+      const cls = "hk" + (k.round ? " round" : "") + (k.cross ? " cross" : "");
+      keys += `<div class="${cls}" style="left:${k.x * 100}%;top:${k.y * 100}%;width:${k.w * 100}%;height:${k.h * 100}%;color:${C[k.role]};border-color:${C[k.role]}"></div>`;
+    }
+    col.innerHTML = `<div class="fbox" style="height:${maxH}px"><div class="face" style="width:${w}px;height:${h}px"><img src="${f.img}">${keys}</div></div>
+      <div class="fname">${NAMES[r][0]}<span class="r">${NAMES[r][1]}</span></div>
+      <div class="how">${HOW[r].map(t => `<div>${t}</div>`).join("")}</div>`;
+    row.appendChild(col);
+  }
+  faces.appendChild(g);
+}
+const LEG = [["digit", "цифры — набор частоты"], ["go", "подтвердить частоту"], ["back", "стереть цифру, а если нечего — выйти"],
+  ["step", "шаг на соседний канал"], ["dot", "точка (после трёх цифр ставится сама)"], ["close", "закрыть окно"]];
+document.getElementById("legend").innerHTML = LEG.map(([r, t]) =>
+  `<div><span class="sw" style="color:${C[r]};border-color:${C[r]}"></span>${t}</div>`).join("");
+
+// ---- линейка: кадр по крайним рациям, подписи под низом каждой
+const L = DATA.lineup, R = L.radios, box = document.getElementById("lineup");
+const x0 = Math.min(...Object.values(R).map(v => v.left[0])) - 60;
+const x1 = Math.max(...Object.values(R).map(v => v.right[0])) + 40;
+const y0 = 60, y1 = Math.max(...Object.values(R).map(v => v.bottom[1])) + 40;
+const bw = box.parentElement.clientWidth, k = bw / (x1 - x0), capH = 78;
+box.style.width = bw + "px"; box.style.height = ((y1 - y0) * k + capH) + "px";
+box.innerHTML = `<img src="lineup.png" style="width:${L.size[0] * k}px;left:${-x0 * k}px;top:${-y0 * k}px">`;
+for (const [r, v] of Object.entries(R)) {
+  const c = document.createElement("div"); c.className = "cap";
+  c.style.left = (v.bottom[0] - x0) * k + "px"; c.style.top = ((y1 - y0) * k + 4) + "px";
+  c.innerHTML = `<div class="m">${NAMES[r][0]}</div><div class="r">${NAMES[r][1]}</div>`;
+  box.appendChild(c);
+}
+
+// ---- полоса частот: деление на каждый МГц, метки на примерах
+const bar = document.getElementById("bar"), lo = 136, hi = 155.95;
+for (let m = 137; m < 156; m++) bar.insertAdjacentHTML("beforeend", `<div class="tick" style="left:${(m - lo) / (hi - lo) * 100}%"></div>`);
+for (const n of [21, 101, 191, 301]) {
+  const f = lo + 0.05 * (n - 1);
+  bar.insertAdjacentHTML("beforeend", `<div class="pin" style="left:${(f - lo) / (hi - lo) * 100}%">канал ${n}<b>${f.toFixed(3)}</b></div>`);
+}
+
+document.body.setAttribute("data-h", Math.ceil(document.documentElement.scrollHeight));
+</script>
+</body>
+</html>

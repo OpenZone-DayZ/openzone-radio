@@ -15,11 +15,27 @@ name = "openzone-radio"
 # Порядок значущий: склейки жорстко вимагають базовий мод, і пакувати їх
 # раніше за нього немає сенсу.
 mods = ["OpenZone_Radio", "OpenZone_Radio_PDA", "OpenZone_Radio_VPP"]
+# Моделі рацій -- частина OpenZone_Radio (OpenZone_Radio/model/<рація>), а не окремий pbo:
+# з 2026-09-25 окремого аддона моделей немає. Їхні вихідні скрипти -- у models/.
+#
+# binarize не має ключа для кореня: корінь -- його робоча тека, і кожен шлях, зашитий у
+# модель, рахується від неї. Моделі посилаються на OpenZone_Radio\model\... і на ванільні
+# dz\data\data\..., тож корінь тримає обидві теки: models/assets/_kit/radiokit.py
+# (prepare_model_root) пише MLOD у build/model-root/OpenZone_Radio/model/<рація>/ і
+# під'єднує туди data\ з мода та ванільний dz\. Збірка однієї моделі:
+# asset_build(mod="OpenZone_Radio", source="model/<рація>").
+project_root = "build/model-root"
 
 [expect]
 ready_line   = "radio loaded"
 max_warnings = 0
-forbid       = ["Bad type", "Can't compile", "NULL pointer to instance"]
+forbid       = ["Bad type", "Can't compile", "NULL pointer to instance",
+                # модель, текстура чи матеріал, що не знайшлися: шлях у p3d або rvmat
+                # не той, куди лягли файли (див. [build] project_root)
+                "No components in openzone_radio\\model",
+                "Cannot open object openzone_radio\\model",
+                "Cannot load texture openzone_radio\\model",
+                "Cannot load material file openzone_radio\\model"]
 error_regex  = ["SCRIPT\\s+\\(E\\).*OZR_"]
 # Ядро ходить до моста по http на 127.0.0.1 і чесно попереджає про це
 # кожен бут. На локальному стенді це стан, а не подія: без цього рядка
@@ -36,4 +52,4 @@ noise        = ["Bridge.Url is not https"]
 # треба переписати так само навмисне.
 [expect.counters]
 bands    = 400
-profiles = 11
+profiles = 7

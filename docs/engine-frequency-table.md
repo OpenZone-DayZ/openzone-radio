@@ -276,8 +276,8 @@ works too, but then a relocated array has to sit within ±2 GB of the image so t
   AdvancedCommunication : EntityAI` — a different branch from `TransmitterBase :
   ItemTransmitter`, which is what this mod modifies — so the widened band never reaches
   it whatever we do. And the mod does not profile it: the stand's own
-  `OZ_Radio_Profiles.json` holds exactly the eleven classes the boot counts
-  (`profiles=11`), all ten `OZ_Radio_*` handhelds plus `OZ_Module_Radio`, and no static
+  `OZ_Radio_Profiles.json` holds exactly the seven classes the boot counts
+  (`profiles=7`), all six `OZ_Radio_*` handhelds plus `OZ_Module_Radio`, and no static
   transmitter. An override would have nothing to correct.
 
 The client's wrong local float is harmless: it only mis-keys an entry in a map

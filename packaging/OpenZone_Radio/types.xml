@@ -2,7 +2,7 @@
 <!--
   OpenZone Radio - example central-economy entries.
 
-  These ten classes exist only in config.cpp until you add them here: the
+  These six classes exist only in config.cpp until you add them here: the
   central economy does not spawn what it has not been told about, and a
   dropped item of an unknown type lives on the ground by rules you did not
   choose. Both are decided by types.xml, so this file ships with the mod.
@@ -20,54 +20,6 @@
   the sets turn up where a radio would, once you let them.
 -->
 <types>
-    <type name="OZ_Radio_50m">
-        <nominal>0</nominal>
-        <lifetime>86400</lifetime>
-        <restock>0</restock>
-        <min>0</min>
-        <quantmin>-1</quantmin>
-        <quantmax>-1</quantmax>
-        <cost>100</cost>
-        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
-        <category name="tools"/>
-        <tag name="shelves"/>
-        <usage name="Military"/>
-        <usage name="Police"/>
-        <usage name="Medic"/>
-        <usage name="Firefighter"/>
-    </type>
-    <type name="OZ_Radio_100m">
-        <nominal>0</nominal>
-        <lifetime>86400</lifetime>
-        <restock>0</restock>
-        <min>0</min>
-        <quantmin>-1</quantmin>
-        <quantmax>-1</quantmax>
-        <cost>100</cost>
-        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
-        <category name="tools"/>
-        <tag name="shelves"/>
-        <usage name="Military"/>
-        <usage name="Police"/>
-        <usage name="Medic"/>
-        <usage name="Firefighter"/>
-    </type>
-    <type name="OZ_Radio_200m">
-        <nominal>0</nominal>
-        <lifetime>86400</lifetime>
-        <restock>0</restock>
-        <min>0</min>
-        <quantmin>-1</quantmin>
-        <quantmax>-1</quantmax>
-        <cost>100</cost>
-        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
-        <category name="tools"/>
-        <tag name="shelves"/>
-        <usage name="Military"/>
-        <usage name="Police"/>
-        <usage name="Medic"/>
-        <usage name="Firefighter"/>
-    </type>
     <type name="OZ_Radio_250m">
         <nominal>0</nominal>
         <lifetime>86400</lifetime>
@@ -85,22 +37,6 @@
         <usage name="Firefighter"/>
     </type>
     <type name="OZ_Radio_500m">
-        <nominal>0</nominal>
-        <lifetime>86400</lifetime>
-        <restock>0</restock>
-        <min>0</min>
-        <quantmin>-1</quantmin>
-        <quantmax>-1</quantmax>
-        <cost>100</cost>
-        <flags count_in_cargo="0" count_in_hoarder="0" count_in_map="1" count_in_player="0" crafted="0" deloot="0"/>
-        <category name="tools"/>
-        <tag name="shelves"/>
-        <usage name="Military"/>
-        <usage name="Police"/>
-        <usage name="Medic"/>
-        <usage name="Firefighter"/>
-    </type>
-    <type name="OZ_Radio_750m">
         <nominal>0</nominal>
         <lifetime>86400</lifetime>
         <restock>0</restock>

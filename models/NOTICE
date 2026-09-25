@@ -1,0 +1,57 @@
+OpenZone Radio -- the radio models
+Copyright (c) 2026 Crystal
+
+The models, textures and frequency-window faces of the OpenZone Radio sets.
+They ship inside OpenZone Radio itself (OpenZone_Radio/model, OpenZone_Radio/gui);
+this folder, models/, holds the scripts they are built from. Part of OpenZone --
+open mods for DayZ.
+
+Licensed under Creative Commons Attribution-NonCommercial-ShareAlike 4.0
+International (CC BY-NC-SA 4.0). Full text in LICENSE, or at
+https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+
+WHAT YOU MAY DO WITH THIS MOD
+
+Repacking: YES.  Selling: NO.
+
+You may unpack this mod, change it, put it in a modpack, use its models in
+your own builds and hand the result to your players. Most DayZ mods forbid that, so
+saying nothing would read as a refusal -- this is not one.
+
+Four conditions. The first three are the licence rather than a preference; the
+fourth is how PBO signing works:
+
+  1. Say where it came from, and link the Workshop page or the repository.
+
+  2. Keep the same licence on your repack (CC BY-NC-SA 4.0), and carry this
+     NOTICE with it.
+
+  3. Do not sell it. Running this on a server that takes donations, sells
+     cosmetics or sells queue slots is fine -- that is not commercial use.
+     Selling the mod itself or any derivative, or putting it behind a paywall
+     (a "donate to download" one counts), is not.
+
+  4. Sign your repack with your OWN key, not this one. A key says who stands
+     behind a build, and only you can stand behind yours. Generate a pair with
+     DSCreateKey.exe from DayZ Tools and ship your own .bikey.
+
+
+WHERE THE ASSETS COME FROM
+
+Every model and texture here is original work, built for this mod in Blender
+from scripts that ship in the repository (models/assets/<radio>/scripts; the
+shared pipeline is models/assets/_kit, and the Blender scenes a build saves are
+models/assets/<radio>/work/<radio>_high.blend and _game.blend). Public
+renders on Sketchfab were used as visual references for proportions and layout
+only; no geometry, texture or other data from them is used. The brand on
+the cases (OZ-COM), its logo, the model names and all other labels are
+invented for the mod and do not reproduce any manufacturer's marks.
+
+  250 m     a toy PMR walkie-talkie (T-388): "Dirty Walkie Talkie" by biofrost.
+  500 m     after the Midland LXT600: "Walkie-Talkie" by mehmetfmalli.
+  1 km      after the Baofeng UV-5R: "Walkie-Talkie Baofeng UV-5R" by pad1s and
+            "Handheld Portable Radio - Walkie Talkie" by abg_3d.
+  2 km      after the Baofeng UV-S9: "Walkie-Talkie Baofeng UV-S9 PBR" by Archivz.
+  5 km      after the Motorola XTS5000: "Walkie Talkie XTS5000" by zombitt.
+  10 km     after the AN/PRC-152: "PRC 152" by r4m and "Harris AN/PRC 152A" by pnuky.

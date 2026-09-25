@@ -1,0 +1,365 @@
+// Окно частот «лицом рации» (prc152). СГЕНЕРИРОВАНО tools/make_hud_layouts.py - руками не править.
+// Имена читают OZR_FreqMenu.c и OZR_FreqMenuFace.c: DragBar, TitleText, HintText, BtnClose,
+// Btn0..Btn9, BtnUp, BtnDown, BtnGo, BtnDot, BtnBack, LcdMain, LcdSub, Face.
+
+FrameWidgetClass Card {
+ visible 1
+ position 0 0
+ size 276 739
+ hexactpos 1
+ vexactpos 1
+ hexactsize 1
+ vexactsize 1
+ priority 1
+ {
+  ImageWidgetClass Face {
+   visible 1
+   ignorepointer 1
+   position 0 0
+   size 346 693
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 1
+   image0 "OpenZone_Radio/gui/faces/oz_face_prc152.edds"
+   mode blend
+   "src alpha" 1
+   stretch 1
+   filter 1
+  }
+  PanelWidgetClass DragBar {
+   visible 1
+   position 0 0
+   size 276 693
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 2
+   color 0 0 0 0
+  }
+  TextWidgetClass LcdMain {
+   visible 1
+   ignorepointer 1
+   position 72 249
+   size 132 26
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 4
+   text ""
+   font "gui/fonts/sdf_MetronBook24"
+   "exact text" 1
+   "exact text size" 20
+   "text halign" left
+   "text valign" center
+   color 0.060 0.100 0.050 0.92
+  }
+  TextWidgetClass LcdSub {
+   visible 1
+   ignorepointer 1
+   position 72 275
+   size 132 22
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 4
+   text ""
+   font "gui/fonts/sdf_MetronBook24"
+   "exact text" 1
+   "exact text size" 17
+   "text halign" left
+   "text valign" center
+   color 0.060 0.100 0.050 0.92
+  }
+  ButtonWidgetClass Btn1 {
+   visible 1
+   position 68 315
+   size 33 30
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 5
+   text ""
+   color 1 1 1 0
+  }
+  ButtonWidgetClass Btn2 {
+   visible 1
+   position 103 315
+   size 33 30
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 5
+   text ""
+   color 1 1 1 0
+  }
+  ButtonWidgetClass Btn3 {
+   visible 1
+   position 140 315
+   size 33 30
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 5
+   text ""
+   color 1 1 1 0
+  }
+  ButtonWidgetClass BtnBack {
+   visible 1
+   position 176 315
+   size 33 30
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 5
+   text ""
+   color 1 1 1 0
+  }
+  ButtonWidgetClass Btn4 {
+   visible 1
+   position 68 351
+   size 33 30
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 5
+   text ""
+   color 1 1 1 0
+  }
+  ButtonWidgetClass Btn5 {
+   visible 1
+   position 103 351
+   size 33 30
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 5
+   text ""
+   color 1 1 1 0
+  }
+  ButtonWidgetClass Btn6 {
+   visible 1
+   position 140 351
+   size 33 30
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 5
+   text ""
+   color 1 1 1 0
+  }
+  ButtonWidgetClass BtnGo {
+   visible 1
+   position 176 351
+   size 33 30
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 5
+   text ""
+   color 1 1 1 0
+  }
+  ButtonWidgetClass Btn7 {
+   visible 1
+   position 68 387
+   size 33 30
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 5
+   text ""
+   color 1 1 1 0
+  }
+  ButtonWidgetClass Btn8 {
+   visible 1
+   position 103 387
+   size 33 30
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 5
+   text ""
+   color 1 1 1 0
+  }
+  ButtonWidgetClass Btn9 {
+   visible 1
+   position 140 387
+   size 33 30
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 5
+   text ""
+   color 1 1 1 0
+  }
+  ButtonWidgetClass Btn0 {
+   visible 1
+   position 68 423
+   size 33 30
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 5
+   text ""
+   color 1 1 1 0
+  }
+  ButtonWidgetClass BtnBack {
+   visible 1
+   position 103 423
+   size 33 30
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 5
+   text ""
+   color 1 1 1 0
+  }
+  ButtonWidgetClass BtnDot {
+   visible 1
+   position 140 423
+   size 33 30
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 5
+   text ""
+   color 1 1 1 0
+  }
+  ButtonWidgetClass BtnUp {
+   visible 1
+   position 176 388
+   size 33 33
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 5
+   text ""
+   color 1 1 1 0
+  }
+  ButtonWidgetClass BtnDown {
+   visible 1
+   position 176 419
+   size 33 33
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 5
+   text ""
+   color 1 1 1 0
+  }
+  ImageWidgetClass BtnCloseBg {
+   visible 1
+   ignorepointer 1
+   position 244 6
+   size 26 26
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 5
+   image0 "set:dayz_gui image:circle"
+   mode blend
+   "src alpha" 1
+   stretch 1
+   color 0.10 0.10 0.11 0.85
+  }
+  ButtonWidgetClass BtnClose {
+   visible 1
+   position 244 6
+   size 26 26
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 6
+   text ""
+   color 1 1 1 0
+  }
+  TextWidgetClass BtnCloseLabel {
+   visible 1
+   ignorepointer 1
+   position 244 7
+   size 26 26
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 7
+   text "X"
+   font "gui/fonts/sdf_MetronBook24"
+   "exact text" 1
+   "exact text size" 17
+   "text halign" center
+   "text valign" center
+   color 0.92 0.92 0.92 1
+  }
+  PanelWidgetClass CaptionBg {
+   visible 1
+   position 0 693
+   size 276 46
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 2
+   color 0.055 0.059 0.071 0.85
+   style rover_sim_colorable
+  }
+  TextWidgetClass TitleText {
+   visible 1
+   ignorepointer 1
+   position 10 696
+   size 256 20
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 4
+   text ""
+   font "gui/fonts/sdf_MetronBook24"
+   "exact text" 1
+   "exact text size" 17
+   "text halign" left
+   "text valign" center
+   color 0.85 0.85 0.87 1
+  }
+  TextWidgetClass HintText {
+   visible 1
+   ignorepointer 1
+   position 10 716
+   size 256 20
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   priority 4
+   text ""
+   font "gui/fonts/sdf_MetronBook24"
+   "exact text" 1
+   "exact text size" 14
+   "text halign" left
+   "text valign" center
+   color 0.62 0.63 0.67 1
+  }
+ }
+}

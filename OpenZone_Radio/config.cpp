@@ -290,87 +290,181 @@ class CfgSoundSets
     };
 };
 
+// THE MODELS. Every range class has a handheld of its own, built for this mod
+// in Blender from the scripts in models/ (models/assets/<radio>/scripts; how
+// to rebuild them: models/README.md). What ships sits under model/<radio>:
+// the binarized p3d, its model.cfg, and data/ with the textures and the
+// three materials the damage levels switch between. Every path baked into
+// a p3d starts with OpenZone_Radio\model\ -- move a folder and the models
+// have to be rebuilt, not just moved.
+//
+// All six carry one invented brand, OZ-COM, and a model name printed on the
+// case; the item name repeats it (stringtable.csv, STR_OZR_RADIO_*).
+//
+// The frequency window (K) shows the face of the radio in hands
+// (5_Mission/OpenZone_Radio/OZR_FreqMenuFace.c). Per class:
+//   ozrFaceLayout    the window layout (gui/layouts/oz_face_<s>.layout,
+//                    written by models/tools/make_hud_layouts.py)
+//   ozrFaceImage     the face picture (gui/faces, .edds like vanilla GUI)
+//   ozrFaceMode      "keypad" -- the frequency is typed; "step" -- no
+//                    digits, the arrows switch the channel at once
+//   ozrFaceHint      the hint line under the radio (stringtable.csv)
+// A class without ozrFaceLayout keeps the plain keypad window.
+// ozrPowerGesture = "press": switched on and off with the GPS receiver's
+// button press (4_World/OpenZone_Radio/OZR_PowerGesture.c) instead of the
+// vanilla "turn item on" gesture.
 class CfgVehicles
 {
     class PersonalRadio;
 
-    class OZ_Radio_100m : PersonalRadio
-    {
-        scope = 2;
-        displayName = "$STR_OZR_RADIO_100";
-        descriptionShort = "$STR_OZR_RADIO_DESC";
-        range = 100;
-    };
-
-    class OZ_Radio_200m : PersonalRadio
-    {
-        scope = 2;
-        displayName = "$STR_OZR_RADIO_200";
-        descriptionShort = "$STR_OZR_RADIO_DESC";
-        range = 200;
-    };
-
+    // 500 m -- Bazar (Базар): a consumer FRS/GMRS handheld after the Midland LXT600.
     class OZ_Radio_500m : PersonalRadio
     {
         scope = 2;
         displayName = "$STR_OZR_RADIO_500";
-        descriptionShort = "$STR_OZR_RADIO_DESC";
+        descriptionShort = "$STR_OZR_RADIO_DESC_500";
         range = 500;
+        model = "\OpenZone_Radio\model\lxt\oz_radio_lxt.p3d";
+        ozrFaceLayout = "OpenZone_Radio/gui/layouts/oz_face_lxt.layout";
+        ozrFaceImage = "OpenZone_Radio/gui/faces/oz_face_lxt.edds";
+        ozrFaceMode = "step";
+        ozrFaceHint = "#STR_OZR_HINT_STEP";
+        class DamageSystem
+        {
+            class GlobalHealth
+            {
+                class Health
+                {
+                    hitpoints = 50;
+                    healthLevels[] = {{1.0,{"OpenZone_Radio\model\lxt\data\oz_radio_lxt.rvmat"}},{0.7,{"OpenZone_Radio\model\lxt\data\oz_radio_lxt.rvmat"}},{0.5,{"OpenZone_Radio\model\lxt\data\oz_radio_lxt_damage.rvmat"}},{0.3,{"OpenZone_Radio\model\lxt\data\oz_radio_lxt_damage.rvmat"}},{0.0,{"OpenZone_Radio\model\lxt\data\oz_radio_lxt_destruct.rvmat"}}};
+                };
+            };
+        };
     };
 
+    // 1 km -- Balabolka (Балаболка): a cheap dual-band handheld after the Baofeng UV-5R.
     class OZ_Radio_1000m : PersonalRadio
     {
         scope = 2;
         displayName = "$STR_OZR_RADIO_1000";
-        descriptionShort = "$STR_OZR_RADIO_DESC";
+        descriptionShort = "$STR_OZR_RADIO_DESC_1000";
         range = 1000;
+        model = "\OpenZone_Radio\model\uv5r\oz_radio_uv5r.p3d";
+        ozrFaceLayout = "OpenZone_Radio/gui/layouts/oz_face_uv5r.layout";
+        ozrFaceImage = "OpenZone_Radio/gui/faces/oz_face_uv5r.edds";
+        ozrFaceMode = "keypad";
+        ozrFaceHint = "#STR_OZR_HINT_MENU";
+        class DamageSystem
+        {
+            class GlobalHealth
+            {
+                class Health
+                {
+                    hitpoints = 50;
+                    healthLevels[] = {{1.0,{"OpenZone_Radio\model\uv5r\data\oz_radio_uv5r.rvmat"}},{0.7,{"OpenZone_Radio\model\uv5r\data\oz_radio_uv5r.rvmat"}},{0.5,{"OpenZone_Radio\model\uv5r\data\oz_radio_uv5r_damage.rvmat"}},{0.3,{"OpenZone_Radio\model\uv5r\data\oz_radio_uv5r_damage.rvmat"}},{0.0,{"OpenZone_Radio\model\uv5r\data\oz_radio_uv5r_destruct.rvmat"}}};
+                };
+            };
+        };
     };
 
+    // 5 km -- Terran (Терран): a service radio after the Motorola XTS5000.
     class OZ_Radio_5000m : PersonalRadio
     {
         scope = 2;
         displayName = "$STR_OZR_RADIO_5000";
-        descriptionShort = "$STR_OZR_RADIO_DESC";
+        descriptionShort = "$STR_OZR_RADIO_DESC_5000";
         range = 5000;
+        model = "\OpenZone_Radio\model\xts\oz_radio_xts.p3d";
+        ozrFaceLayout = "OpenZone_Radio/gui/layouts/oz_face_xts.layout";
+        ozrFaceImage = "OpenZone_Radio/gui/faces/oz_face_xts.edds";
+        ozrFaceMode = "keypad";
+        ozrFaceHint = "#STR_OZR_HINT_ENTER";
+        class DamageSystem
+        {
+            class GlobalHealth
+            {
+                class Health
+                {
+                    hitpoints = 50;
+                    healthLevels[] = {{1.0,{"OpenZone_Radio\model\xts\data\oz_radio_xts.rvmat"}},{0.7,{"OpenZone_Radio\model\xts\data\oz_radio_xts.rvmat"}},{0.5,{"OpenZone_Radio\model\xts\data\oz_radio_xts_damage.rvmat"}},{0.3,{"OpenZone_Radio\model\xts\data\oz_radio_xts_damage.rvmat"}},{0.0,{"OpenZone_Radio\model\xts\data\oz_radio_xts_destruct.rvmat"}}};
+                };
+            };
+        };
     };
 
-    class OZ_Radio_50m : PersonalRadio
-    {
-        scope = 2;
-        displayName = "$STR_OZR_RADIO_50";
-        descriptionShort = "$STR_OZR_RADIO_DESC";
-        range = 50;
-    };
-
+    // 250 m -- Sheptun (Шептун): a toy PMR walkie-talkie after the T-388, dirty and cracked.
     class OZ_Radio_250m : PersonalRadio
     {
         scope = 2;
         displayName = "$STR_OZR_RADIO_250";
-        descriptionShort = "$STR_OZR_RADIO_DESC";
+        descriptionShort = "$STR_OZR_RADIO_DESC_250";
         range = 250;
+        model = "\OpenZone_Radio\model\pmr_t388\oz_radio_t388.p3d";
+        ozrFaceLayout = "OpenZone_Radio/gui/layouts/oz_face_t388.layout";
+        ozrFaceImage = "OpenZone_Radio/gui/faces/oz_face_t388.edds";
+        ozrFaceMode = "step";
+        ozrFaceHint = "#STR_OZR_HINT_STEP";
+        ozrPowerGesture = "press";   // вкл/выкл - нажатие кнопки, жест GPS-приёмника
+        class DamageSystem
+        {
+            class GlobalHealth
+            {
+                class Health
+                {
+                    hitpoints = 50;
+                    healthLevels[] = {{1.0,{"OpenZone_Radio\model\pmr_t388\data\oz_radio_t388.rvmat"}},{0.7,{"OpenZone_Radio\model\pmr_t388\data\oz_radio_t388.rvmat"}},{0.5,{"OpenZone_Radio\model\pmr_t388\data\oz_radio_t388_damage.rvmat"}},{0.3,{"OpenZone_Radio\model\pmr_t388\data\oz_radio_t388_damage.rvmat"}},{0.0,{"OpenZone_Radio\model\pmr_t388\data\oz_radio_t388_destruct.rvmat"}}};
+                };
+            };
+        };
     };
 
-    class OZ_Radio_750m : PersonalRadio
-    {
-        scope = 2;
-        displayName = "$STR_OZR_RADIO_750";
-        descriptionShort = "$STR_OZR_RADIO_DESC";
-        range = 750;
-    };
-
+    // 2 km -- Skrynia (Скриня): a rugged olive dual-band after the Baofeng UV-S9.
     class OZ_Radio_2000m : PersonalRadio
     {
         scope = 2;
         displayName = "$STR_OZR_RADIO_2000";
-        descriptionShort = "$STR_OZR_RADIO_DESC";
+        descriptionShort = "$STR_OZR_RADIO_DESC_2000";
         range = 2000;
+        model = "\OpenZone_Radio\model\uvs9\oz_radio_uvs9.p3d";
+        ozrFaceLayout = "OpenZone_Radio/gui/layouts/oz_face_uvs9.layout";
+        ozrFaceImage = "OpenZone_Radio/gui/faces/oz_face_uvs9.edds";
+        ozrFaceMode = "keypad";
+        ozrFaceHint = "#STR_OZR_HINT_MENU";
+        class DamageSystem
+        {
+            class GlobalHealth
+            {
+                class Health
+                {
+                    hitpoints = 50;
+                    healthLevels[] = {{1.0,{"OpenZone_Radio\model\uvs9\data\oz_radio_uvs9.rvmat"}},{0.7,{"OpenZone_Radio\model\uvs9\data\oz_radio_uvs9.rvmat"}},{0.5,{"OpenZone_Radio\model\uvs9\data\oz_radio_uvs9_damage.rvmat"}},{0.3,{"OpenZone_Radio\model\uvs9\data\oz_radio_uvs9_damage.rvmat"}},{0.0,{"OpenZone_Radio\model\uvs9\data\oz_radio_uvs9_destruct.rvmat"}}};
+                };
+            };
+        };
     };
 
+    // 10 km -- Crystal (Кристал): a military handheld after the AN/PRC-152.
     class OZ_Radio_10000m : PersonalRadio
     {
         scope = 2;
         displayName = "$STR_OZR_RADIO_10000";
-        descriptionShort = "$STR_OZR_RADIO_DESC";
+        descriptionShort = "$STR_OZR_RADIO_DESC_10000";
         range = 10000;
+        model = "\OpenZone_Radio\model\prc152\oz_radio_prc152.p3d";
+        ozrFaceLayout = "OpenZone_Radio/gui/layouts/oz_face_prc152.layout";
+        ozrFaceImage = "OpenZone_Radio/gui/faces/oz_face_prc152.edds";
+        ozrFaceMode = "keypad";
+        ozrFaceHint = "#STR_OZR_HINT_ENT";
+        class DamageSystem
+        {
+            class GlobalHealth
+            {
+                class Health
+                {
+                    hitpoints = 50;
+                    healthLevels[] = {{1.0,{"OpenZone_Radio\model\prc152\data\oz_radio_prc152.rvmat"}},{0.7,{"OpenZone_Radio\model\prc152\data\oz_radio_prc152.rvmat"}},{0.5,{"OpenZone_Radio\model\prc152\data\oz_radio_prc152_damage.rvmat"}},{0.3,{"OpenZone_Radio\model\prc152\data\oz_radio_prc152_damage.rvmat"}},{0.0,{"OpenZone_Radio\model\prc152\data\oz_radio_prc152_destruct.rvmat"}}};
+                };
+            };
+        };
     };
 };
