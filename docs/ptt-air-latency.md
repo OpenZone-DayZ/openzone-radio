@@ -82,9 +82,42 @@ Expected gain: the loss at the start of a press drops from a round trip plus
 two frames to half a round trip. A second, server-side half: keep the air open
 300–500 ms after release (`CallLater` on the release edge) so tails are not cut.
 
-Status 2026-09-25: analysed, not implemented; the owner decides. The
-measurement is a stopwatch on a one-word phrase between two people on the stand,
-before and after.
+Status: implemented on the client on 2026-09-25 by the owner's decision
+(`OZR_Ptt.LocalAir`: at the press edge `EnableBroadcast(true)` on every live
+profiled radio of the top place tier, `false` at release; a latch gives no
+release edge, so it does not close). The server is unchanged apart from a
+debug line (`ptt gate: other <class> is shut on the server`) that prints the
+state of the radios it did NOT pick after every press. The hang time was
+withdrawn: with a mirrored key the client captures nothing after release, so
+an air held open after it would carry nothing. The measurement is a stopwatch
+on a one-word phrase between two people on the stand, before and after.
+
+## Can the client's flag reach the server? No
+
+Asked by the owner before the change went in; read out of both binaries
+(2026-08-13) on 2026-09-25:
+
+- the client's native `EnableBroadcast` (`+0x5EED90` in DayZ_x64.exe) writes
+  byte `+0x13` of the client's own copy and calls the generic "entity variable
+  changed" hook (`+0x7035C0` → `+0x6F29E0` → `+0x716220`), the same hook the
+  server has (`+0x66CEF0` → `+0x691670`, 92 callers): a dirty mark for
+  replication. Item state is replicated by the server only; a client is never
+  its master. No VoN or network send follows;
+- on the server, byte `+0x13` has exactly two writers: its own native
+  `EnableBroadcast` (`+0x5683C0`, i.e. `OZR_SetSpeaking`) and the READ path of
+  the `ItemTransmitter` serializer (`+0x568730`, slot 2). The read path runs on
+  the receiving end of replication, which is the client: the server has no
+  incoming item-state stream;
+- the server's dispatcher of client messages (`+0x6C38A0`, NetworkServer)
+  knows inventory commands, object delete requests, chat, admin login, player
+  reports, script user messages (RPC) and disconnect. There is no "item state
+  from a client" message, so the flag cannot arrive by sync or otherwise;
+- who hears is decided on the server's copies: the matching (`+0x9A6040`) reads
+  the server object's `+0x13`, and its inputs are the per-player maps built by
+  the server's own walk of the radios, not a list taken from a voice packet.
+
+What static reading cannot close is closed on the stand by the debug line
+above: after a press the radios the server did not pick must print `shut`.
 
 ## Other reasons a listener hears nothing
 

@@ -128,7 +128,10 @@ class OZR_Ptt
         s_LastPress = 0;
 
         if (s_Sent)
+        {
+            LocalAir(false);
             Send(false, false);
+        }
 
         s_Sent      = false;
         s_SentLock  = false;
@@ -205,6 +208,81 @@ class OZR_Ptt
         return false;
     }
 
+    // ЛОКАЛЬНЕ ВІДКРИТТЯ ЕФІРУ -- лише клієнтська копія прапорця вещання.
+    //
+    // Прочитано з бінарників 2026-09-25 (docs/ptt-air-latency.md): свій потік у
+    // рацію клієнт починає лише тоді, коли в ЙОГО копії рації стоїть прапорець
+    // вещання, а цю копію сервер віддає синхронізацією -- тобто через пінг і
+    // два кадри після натиснення. Початок кожної фрази пропадав. Тепер прапорець
+    // ставимо самі, одразу, і потік іде з першого кадру.
+    //
+    // Кого чути, і далі вирішує сервер по СВОЇЙ копії (OZR_Module.OZR_PickSpeaker):
+    // клієнтський прапорець на сервер не їде ніяк -- ані синхронізацією (вона
+    // одностороння, сервер -> клієнти), ані повідомленням (у диспетчера сервера
+    // такого немає). Зайву локально відкриту рацію сервер відкидає на перевірці
+    // свого прапорця, і слухачі отримують той самий один ефір, що й раніше.
+    //
+    // Відкриваємо верхній ярус за місцем: руки; без рук -- надягнуті; без них --
+    // карго, якщо сервер дозволив. Серед рівних -- усі: мітку «тримали
+    // останньою» знає лише сервер, і вибір лишається за ним. Закриваємо ті,
+    // що відкрили; защіпка краю відпускання не дає, тож і не закриває.
+    private static ref array<TransmitterBase> s_Opened;
+
+    private static void LocalAir(bool on)
+    {
+        if (!s_Opened)
+            s_Opened = new array<TransmitterBase>();
+
+        if (!on)
+        {
+            for (int k = 0; k < s_Opened.Count(); k++)
+            {
+                if (s_Opened[k])
+                    s_Opened[k].EnableBroadcast(false);
+            }
+            s_Opened.Clear();
+            return;
+        }
+
+        s_Opened.Clear();
+
+        PlayerBase p = PlayerBase.Cast(GetGame().GetPlayer());
+        if (!p || !p.GetInventory())
+            return;
+
+        array<EntityAI> items = new array<EntityAI>();
+        if (!p.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, items))
+            return;
+
+        bool cargo = OZR_Audio.PttFromCargo();
+        int best = 0;
+
+        for (int i = 0; i < items.Count(); i++)
+        {
+            TransmitterBase t = TransmitterBase.Cast(items[i]);
+            if (!t || !OZR_ClientGrid.For(t.GetType()))
+                continue;
+
+            int rank = t.OZR_SpeakRank(cargo);
+            if (rank <= 0)
+                continue;
+
+            if (rank > best)
+            {
+                best = rank;
+                s_Opened.Clear();
+            }
+
+            if (rank == best)
+                s_Opened.Insert(t);
+        }
+
+        for (int j = 0; j < s_Opened.Count(); j++)
+            s_Opened[j].EnableBroadcast(true);
+
+        OZR_Log.Dbg("ptt: air opened locally on " + s_Opened.Count().ToString() + " radio(s), rank " + best.ToString());
+    }
+
     private static void Apply()
     {
         bool asked = s_Down || s_Latched;
@@ -235,6 +313,11 @@ class OZR_Ptt
         // кинуту рацію з замком він лишає говорити, а з утриманням -- ні.
         if (want != s_Sent || lock != s_SentLock)
         {
+            // Спершу локальний прапорець, потім біт серверові: потік має
+            // піти в той самий кадр, а не після відповіді.
+            if (want != s_Sent)
+                LocalAir(want);
+
             Send(want, lock);
             s_Sent     = want;
             s_SentLock = lock;

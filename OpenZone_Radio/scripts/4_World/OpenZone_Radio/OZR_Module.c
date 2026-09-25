@@ -256,6 +256,26 @@ class OZR_Module : CF_ModuleWorld
         if (!pick.OZR_SetSpeaking(true, locked))
             return 0;
 
+        // Доказ для клієнтського передвідкриття (OZR_Ptt.LocalAir): клієнт ставить
+        // СВІЙ прапорець вещання на всі рації верхнього ярусу, а тут видно, що
+        // серверні копії ІНШИХ профільних рацій лишаються закритими -- клієнтський
+        // прапорець на сервер не доїжджає. Тільки в налагодженні: рядок на кожне
+        // натиснення в бойовому лозі нікому не потрібен.
+        if (OZR_Log.IsDebug())
+        {
+            for (int k = 0; k < items.Count(); k++)
+            {
+                TransmitterBase o = TransmitterBase.Cast(items[k]);
+                if (!o || o == pick || !OZR_Profiles.For(o.GetType()))
+                    continue;
+
+                string air = "shut";
+                if (o.IsBroadcasting())
+                    air = "OPEN";
+                OZR_Log.Dbg("ptt gate: other " + o.GetType() + " is " + air + " on the server");
+            }
+        }
+
         return 1;
     }
 
