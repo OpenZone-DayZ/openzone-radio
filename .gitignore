@@ -41,7 +41,8 @@ __pycache__/
 
 # Моделі рацій (models/). Корінь збірки моделей: MLOD і посилання на data\ та ванільний dz\
 # (див. dayz-mcp.toml, [build] project_root) -- похідне, збирається заново.
-build/model-root/
+build/model-root/*
+!build/model-root/.gitkeep
 models/build/
 # Проміжне конвеєра моделей: відтворюється скриптами models/assets/<рація>/scripts, і в git
 # воно дало б дві копії, що розходяться. Що йде в мод (.p3d, .paa, .rvmat, model.cfg), лежить

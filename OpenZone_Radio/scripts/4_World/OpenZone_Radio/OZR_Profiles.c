@@ -46,6 +46,12 @@ class OZR_Profiles : OZR_ConfigBase
         Version = LatestVersion();
         Radios  = new array<ref OZR_RadioProfile>();
 
+        // Retired 2026-09-25 with their classes in config.cpp (kept as comments
+        // there too, by the owner's decision); uncomment together with them.
+        // Add("OZ_Radio_50m",    BAND_LO, BAND_HI, BAND_STEP);
+        // Add("OZ_Radio_100m",   BAND_LO, BAND_HI, BAND_STEP);
+        // Add("OZ_Radio_200m",   BAND_LO, BAND_HI, BAND_STEP);
+        // Add("OZ_Radio_750m",   BAND_LO, BAND_HI, BAND_STEP);
         Add("OZ_Radio_250m",   BAND_LO, BAND_HI, BAND_STEP);
         Add("OZ_Radio_500m",   BAND_LO, BAND_HI, BAND_STEP);
         Add("OZ_Radio_1000m",  BAND_LO, BAND_HI, BAND_STEP);

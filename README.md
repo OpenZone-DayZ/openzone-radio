@@ -25,7 +25,7 @@ conversations can be on the air at once without mixing, so it is the first thing
 has to know about itself — and it measures rather than assumes.
 
 **Radio profiles.** Bands, steps and limits in JSON: who may tune where, in what
-increments, and between which bounds. Eleven profiles ship as defaults.
+increments, and between which bounds. Seven profiles ship as defaults (six handhelds and the PDA board).
 
 **Push-to-talk with a squelch.** A short burst of static on key down and key up, played
 on the radio itself, so everyone near you hears it too — it is the set giving you away,
@@ -86,6 +86,14 @@ The repository builds **three separate mods**, and this matters when you install
 | **[`@OpenZone_Radio`](https://steamcommunity.com/sharedfiles/filedetails/?id=3794105144)** | Community Framework, OpenZone Core | Always. This is the radio. |
 | [`@OpenZone_Radio_PDA`](https://steamcommunity.com/sharedfiles/filedetails/?id=3798437416) | + OpenZone Core, OpenZone PDA | You run the OpenZone PDA and want the radio as a board in a device bay |
 | [`@OpenZone_Radio_VPP`](https://steamcommunity.com/sharedfiles/filedetails/?id=3798437535) | + OpenZone Core, OpenZone VPP, VPPAdminTools | You want the admin tab for editing profiles in game |
+
+**The six handhelds have models of their own** since 2026-09-25, contributed by Crystal:
+one invented brand, OZ-COM, with a model name printed on each case (Sheptun 250 m, Bazar
+500 m, Balabolka 1 km, Skrynia 2 km, Terran 5 km, Crystal 10 km), the radio's own face in
+the frequency window, and a button-press power gesture on the smallest set. They are part
+of `@OpenZone_Radio` itself, not a second pbo; the Blender sources and the pipeline that
+builds them are in [models/](models/README.md). The four range classes without a model
+(50, 100, 200 and 750 m) are retired and kept as comments in `config.cpp`.
 
 **`@OpenZone_Radio` runs on OpenZone Core.** Until 2026-09-20 it stood alone on Community
 Framework, at the price of a second transport: seven RPCs of its own, a client-side pull
@@ -227,7 +235,7 @@ worse than no knob, so it was removed.
 
 ### Loot and lifetime: the economy has to be told
 
-The ten radio classes exist only in `config.cpp`. DayZ's central economy spawns nothing it
+The six radio classes exist only in `config.cpp`. DayZ's central economy spawns nothing it
 has not been told about, and it cleans up a dropped item of an unknown type by rules you did
 not pick. Both live in `types.xml`, so the mod folder ships an example — `types.xml` next
 to `mod.cpp` — with all ten sets.

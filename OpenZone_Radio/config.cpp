@@ -317,6 +317,44 @@ class CfgVehicles
 {
     class PersonalRadio;
 
+    // THE FOUR RETIRED RANGE CLASSES, kept as comments by the owner's decision of
+    // 2026-09-25 rather than deleted: the six sets above are the ones with a
+    // model, and reviving one of these is a matter of uncommenting it here, in
+    // OZR_Profiles.c and in packaging/types.xml (their strings are still in the
+    // table). They would look like the vanilla walkie-talkie. Items of these
+    // classes in saved worlds and inventories are gone while they stay off.
+    // class OZ_Radio_50m : PersonalRadio
+    // {
+    //     scope = 2;
+    //     displayName = "$STR_OZR_RADIO_50";
+    //     descriptionShort = "$STR_OZR_RADIO_DESC";
+    //     range = 50;
+    // };
+
+    // class OZ_Radio_100m : PersonalRadio
+    // {
+    //     scope = 2;
+    //     displayName = "$STR_OZR_RADIO_100";
+    //     descriptionShort = "$STR_OZR_RADIO_DESC";
+    //     range = 100;
+    // };
+
+    // class OZ_Radio_200m : PersonalRadio
+    // {
+    //     scope = 2;
+    //     displayName = "$STR_OZR_RADIO_200";
+    //     descriptionShort = "$STR_OZR_RADIO_DESC";
+    //     range = 200;
+    // };
+
+    // class OZ_Radio_750m : PersonalRadio
+    // {
+    //     scope = 2;
+    //     displayName = "$STR_OZR_RADIO_750";
+    //     descriptionShort = "$STR_OZR_RADIO_DESC";
+    //     range = 750;
+    // };
+
     // 500 m -- Bazar (Базар): a consumer FRS/GMRS handheld after the Midland LXT600.
     class OZ_Radio_500m : PersonalRadio
     {
@@ -404,7 +442,7 @@ class CfgVehicles
         ozrFaceImage = "OpenZone_Radio/gui/faces/oz_face_t388.edds";
         ozrFaceMode = "step";
         ozrFaceHint = "#STR_OZR_HINT_STEP";
-        ozrPowerGesture = "press";   // вкл/выкл - нажатие кнопки, жест GPS-приёмника
+        ozrPowerGesture = "press";   // on/off by a button press, the GPS receiver's gesture
         class DamageSystem
         {
             class GlobalHealth
