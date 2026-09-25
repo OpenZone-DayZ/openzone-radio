@@ -97,9 +97,16 @@ Engine side:
   radio on the ground or in a vehicle, not on the body;
 - the listener muted the speaker or "muted all" (the engine keeps per-player
   mute lists; `[VON]: player: %d has muted all players`);
-- UDP loss on a bad link drops voice frames; there is no retransmission;
-- a listener who connected during a long latched transmission is added to the
-  speaker's listener table only at the next registration event.
+- UDP loss on a bad link drops voice frames; there is no retransmission.
+
+Not a reason, checked and withdrawn 2026-09-25: the listener tables are NOT
+event-only. Every frame the world update (`+0x8723F0` → `+0x86E2E0` →
+`+0x67F6A0` → `+0x6C82D0` → `+0x6DA400`) walks every player and, for each one
+whose transmitting flag (`player+0x27c`, set by the start/stop-transmitting
+messages) is on, rebuilds the listener set from the current radio maps
+(`+0x6BF070` → `+0x9A6040` → `+0x9AA800`). A player who connects, tunes or
+switches a radio on during somebody's transmission hears it from the next
+frame in which their radio is registered.
 
 Mod side:
 
