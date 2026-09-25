@@ -1,12 +1,12 @@
-"""Лицо рации для окна частот: фронтальный ортографический рендер игровой модели.
+"""The radio's face for the frequency window: a front orthographic render of the in-game model.
 
-    blender -b -P tools/render_hud_faces.py -- [рация ...]
+    blender -b -P tools/render_hud_faces.py -- [radio ...]
 
-Берёт LOD1 с запечёнными текстурами из assets/<рация>/work/<рация>_game.blend, убирает ленту
-дальности (в окне её кладёт отдельная картинка - своя у каждого класса) и рендерит лицо в
-верхний левый угол прозрачного холста TEX_W x TEX_H (степени двойки - иначе ImageToPAA
-откажет). Масштаб и кадр - из tools/hud_spec.py. Пишет assets/<рация>/work/hud/face_raw.png;
-дальше tools/make_hud_layouts.py чистит экран, конвертирует и строит разметку.
+Takes LOD1 with baked textures from assets/<radio>/work/<radio>_game.blend, removes the range
+tape (in the window it is drawn by a separate picture - its own per class) and renders the face into
+the top-left corner of a transparent TEX_W x TEX_H canvas (powers of two - otherwise ImageToPAA
+would refuse it). Scale and frame come from tools/hud_spec.py. Writes assets/<radio>/work/hud/face_raw.png;
+next, tools/make_hud_layouts.py cleans the screen, converts it and builds the layout.
 """
 import math
 import os
@@ -33,7 +33,7 @@ for r in radios:
     ob = dst.objects[0]
     bpy.context.scene.collection.objects.link(ob)
 
-    # лента дальности - вторая секция (radiokit.G_LABEL); в окне её рисует своя картинка
+    # the range tape - the second section (radiokit.G_LABEL); in the window it is drawn by its own picture
     bm = bmesh.new()
     bm.from_mesh(ob.data)
     tape = [f for f in bm.faces if f.material_index == K.G_LABEL]
@@ -50,10 +50,10 @@ for r in radios:
 
     x0, x1, z0, z1 = S.region(r)
     t = S.tex_ppmm(r)
-    cw, ch = S.TEX_W / t / 1000.0, S.TEX_H / t / 1000.0      # холст в метрах
+    cw, ch = S.TEX_W / t / 1000.0, S.TEX_H / t / 1000.0      # canvas in meters
     cam.data.type = "ORTHO"
     cam.data.ortho_scale = max(cw, ch)
-    cam.location = (x0 + cw / 2, -1.0, z1 - ch / 2)           # кадр прижат к левому верхнему углу
+    cam.location = (x0 + cw / 2, -1.0, z1 - ch / 2)           # the frame is pinned to the top-left corner
     cam.rotation_euler = (math.radians(90), 0.0, 0.0)
     cam.data.clip_end = 5.0
 

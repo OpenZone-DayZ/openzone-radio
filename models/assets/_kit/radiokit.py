@@ -1,19 +1,19 @@
-"""Общий набор для моделей раций (Python Блендера): детали, материалы, лоды, развёртка,
-запекание, текстуры, MLOD p3d.
+"""Common kit for radio models (Blender Python): parts, materials, LODs, unwrapping,
+baking, textures, MLOD p3d.
 
-Система координат сборки (Blender): X вправо, Y назад (лицо рации смотрит в -Y), Z вверх,
-метры. Начало координат - центр нижней грани корпуса; по глубине корпус отцентрован.
+Assembly coordinate system (Blender): X right, Y back (the radio's face looks toward -Y), Z up,
+meters. The origin is the center of the case's bottom face; the case is centered along its depth.
 
-Кадр DayZ снят с ванильной WalkieTalkie.p3d (ODOL, 23.09): её Geometry - корпус
-x -0.032..0.030, y 0..0.141, z -0.019..0.022 и антенна x -0.027..-0.010, y 0.140..0.257,
-z 0.004..0.021. Антенна слева, если смотреть спереди (так нарисована её текстура), а слева
-при взгляде из -Z оказывается -X - значит, лицо ванильной рации смотрит в -Z, начало
-координат у дна, +Y вверх. Хват PersonalRadio.anm и прокси слота на лямке рюкзака рассчитаны
-на этот кадр, поэтому наши модели пишутся в нём же:
-    DayZ (x, y, z) = Blender (x, z, y)       - обмен Y/Z, определитель -1, как и должно быть.
+The DayZ frame was taken from the vanilla WalkieTalkie.p3d (ODOL, 23.09): its Geometry - case
+x -0.032..0.030, y 0..0.141, z -0.019..0.022, and antenna x -0.027..-0.010, y 0.140..0.257,
+z 0.004..0.021. The antenna is on the left when viewed from the front (that's how its texture
+is drawn), and left when viewed from -Z turns out to be -X - meaning the vanilla radio's face
+looks toward -Z, with the origin at the bottom, +Y up. The PersonalRadio.anm grip and the
+backpack strap's proxy slot are tuned to this frame, so our models are written in the same frame:
+    DayZ (x, y, z) = Blender (x, z, y)       - Y/Z swapped, determinant -1, as it should be.
 
-Каждая рация - свой скрипт build_<имя>.py с функцией build(m), которая по уровню m.q строит
-детали: q = 0 - детальная модель (только источник запекания), q = 1..4 - игровые лоды.
+Each radio is its own build_<name>.py script with a build(m) function that builds parts
+according to level m.q: q = 0 - detail model (bake source only), q = 1..4 - in-game LODs.
 """
 import math
 import os
@@ -28,14 +28,14 @@ from mathutils import Matrix, Vector
 
 KIT = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.normpath(os.path.join(KIT, ".."))
-MODELS = os.path.normpath(os.path.join(ASSETS, ".."))      # models/ - исходники моделей
-REPO = os.path.normpath(os.path.join(MODELS, ".."))        # корень репозитория openzone-radio
-# Модели - часть основного мода: папка и префикс pbo OpenZone_Radio, внутри model\<рация>.
-# PREFIX - то, с чего начинается каждый путь, зашитый в p3d и rvmat.
+MODELS = os.path.normpath(os.path.join(ASSETS, ".."))      # models/ - model sources
+REPO = os.path.normpath(os.path.join(MODELS, ".."))        # root of the openzone-radio repository
+# Models are part of the main mod: the folder and pbo prefix are OpenZone_Radio, with model\<radio> inside.
+# PREFIX - what every path baked into the p3d and rvmat starts with.
 MOD = "OpenZone_Radio"
 PREFIX = MOD + "\\model"
 PBO_ROOT = os.path.join(REPO, MOD, "model")
-# Корень binarize (build.project_root в dayz-mcp.toml репозитория): в нём папка OpenZone_Radio.
+# Binarize root (build.project_root in the repository's dayz-mcp.toml): contains the OpenZone_Radio folder.
 MODEL_ROOT = os.path.join(REPO, "build", "model-root")
 VANILLA_DZ = r"D:\modding\PDrive\dz"
 IMAGE_TO_PAA = r"E:\SteamLibrary\steamapps\common\DayZ Tools\Bin\ImageToPAA\ImageToPAA.exe"
@@ -43,16 +43,16 @@ PEN = r"dz\data\data\penetration"
 sys.path.insert(0, r"C:\Users\Crystal\.claude\skills\dayz-modding\scripts")
 import p3d  # noqa: E402
 
-# метки граней (слой "part"): приоритет в атласе и особые секции
+# face tags (the "part" layer): atlas priority and special sections
 T_GEN, T_FRONT, T_BACK, T_HIDE, T_LCD, T_KEYS, T_LABEL, T_GLASS = range(8)
 UV_WEIGHT = {T_GEN: 1.0, T_FRONT: 1.35, T_BACK: 0.75, T_HIDE: 0.4, T_LCD: 1.4, T_KEYS: 1.55,
              T_LABEL: 0.02, T_GLASS: 0.02}
-# слоты материалов игровых лодов
+# material slots of the in-game LODs
 G_ATLAS, G_LABEL, G_GLASS = 0, 1, 2
 
 
 # =============================================================================
-# 2D-профили (a, b): для оси Y это (x, z), для оси Z - (x, y), для оси X - (y, z)
+# 2D profiles (a, b): for the Y axis this is (x, z), for the Z axis - (x, y), for the X axis - (y, z)
 # =============================================================================
 def arc(ca, cb, r, a0, a1, n):
     return [(ca + r * math.cos(a0 + (a1 - a0) * i / n), cb + r * math.sin(a0 + (a1 - a0) * i / n)) for i in range(n + 1)]
@@ -67,7 +67,7 @@ def rect(w, h, ca=0.0, cb=0.0):
 
 
 def rrect(w, h, r, ca=0.0, cb=0.0, seg=6):
-    """Скруглённый прямоугольник против часовой; r может быть кортежем (пр.низ, пр.верх, лев.верх, лев.низ)."""
+    """Rounded rectangle, counter-clockwise; r can be a tuple (bottom-right, top-right, top-left, bottom-left)."""
     rs = r if isinstance(r, (tuple, list)) else (r, r, r, r)
     pts = []
     for (sa, sb, a0), rr in zip(((1, -1, -90), (1, 1, 0), (-1, 1, 90), (-1, -1, 180)), rs):
@@ -79,7 +79,7 @@ def rrect(w, h, r, ca=0.0, cb=0.0, seg=6):
 
 
 def rounded_poly(pts, radii, seg=6):
-    """Многоугольник со скруглёнными вершинами (радиус 0 - острая вершина)."""
+    """Polygon with rounded vertices (radius 0 - sharp vertex)."""
     out = []
     n = len(pts)
     for i in range(n):
@@ -101,7 +101,7 @@ def rounded_poly(pts, radii, seg=6):
 
 
 def knurl(ca, cb, r_lo, r_hi, teeth, shape=(0.0, 0.12, 0.5, 0.62)):
-    """Рифлёный профиль: зубцы с плоской вершиной; shape - доли шага."""
+    """Knurled profile: teeth with a flat top; shape - fractions of the step."""
     pts = []
     for t in range(teeth):
         a = 2 * math.pi * t / teeth
@@ -112,7 +112,7 @@ def knurl(ca, cb, r_lo, r_hi, teeth, shape=(0.0, 0.12, 0.5, 0.62)):
 
 
 def densify(pts, step, closed=True):
-    """Вставить точки на длинные рёбра контура (чтобы деталь можно было гнуть)."""
+    """Insert points on long contour edges (so the part can be bent)."""
     out = []
     n = len(pts)
     for i in range(n if closed else n - 1):
@@ -127,7 +127,7 @@ def densify(pts, step, closed=True):
 
 
 def ccw(pts):
-    """Контур против часовой (для prism это важно только для согласованности)."""
+    """Counter-clockwise contour (for prism this matters only for consistency)."""
     s = sum(pts[i][0] * pts[(i + 1) % len(pts)][1] - pts[(i + 1) % len(pts)][0] * pts[i][1] for i in range(len(pts)))
     return pts if s > 0 else pts[::-1]
 
@@ -144,7 +144,7 @@ def _v(axis, a, b, t):
 
 
 def prism(pts, t0, t1, axis="Y"):
-    """Призма: 2D-контур, выдавленный вдоль оси от t0 до t1."""
+    """Prism: a 2D contour extruded along the axis from t0 to t1."""
     bm = bmesh.new()
     pts = ccw(pts)
     lo = [bm.verts.new(_v(axis, a, b, t0)) for a, b in pts]
@@ -160,7 +160,7 @@ def prism(pts, t0, t1, axis="Y"):
 
 
 def ring_prism(outer, inner, t0, t1, axis="Y", closed=True):
-    """Кольцо между двумя контурами одинаковой длины (рамка вокруг окна)."""
+    """Ring between two contours of equal length (a frame around a window)."""
     bm = bmesh.new()
     ol = [bm.verts.new(_v(axis, a, b, t0)) for a, b in outer]
     oh = [bm.verts.new(_v(axis, a, b, t1)) for a, b in outer]
@@ -181,8 +181,8 @@ def ring_prism(outer, inner, t0, t1, axis="Y", closed=True):
 
 
 def lathe(profile, n, ca=0.0, cb=0.0, axis="Z", a0=0.0):
-    """Тело вращения вокруг оси axis, проходящей через (ca, cb). profile: [(r, t)] вдоль оси;
-    r = 0 даёт полюс, иначе торец закрывается n-угольником."""
+    """Solid of revolution around axis, passing through (ca, cb). profile: [(r, t)] along the
+    axis; r = 0 gives a pole, otherwise the end cap is closed with an n-gon."""
     bm = bmesh.new()
     rings = []
     for r, t in profile:
@@ -221,11 +221,11 @@ def fix_normals(bm):
 
 
 def bevel(bm, width, segments, angle=30.0, profile=0.5, only=None, clamp=True):
-    """Фаска/скругление рёбер, у которых двугранный угол больше angle. only(edge) - фильтр.
+    """Bevel/round edges whose dihedral angle is greater than angle. only(edge) - a filter.
 
-    clamp - clamp_overlap Блендера. Он осторожен: на контуре из частых коротких рёбер (волны хвата
-    T-388, шаг 1.3 мм) урезал скругление 4.5 мм до 2.9 мм по всей детали. Где контур плавный и
-    перекрытий быть не может, его выключают."""
+    clamp - Blender's clamp_overlap. It is cautious: on a contour of frequent short edges (the
+    grip waves of the T-388, 1.3 mm pitch) it clamped a 4.5 mm bevel down to 2.9 mm across the
+    whole part. Where the contour is smooth and overlaps are impossible, it is turned off."""
     if width <= 0 or segments <= 0:
         return bm
     bm.normal_update()
@@ -273,7 +273,7 @@ def _tmp_obj(bm, name="_tmp"):
 
 
 def boolean(bm, others, op="DIFFERENCE"):
-    """Булева операция (EXACT) над bmesh; others - список bmesh, освобождаются."""
+    """Boolean operation (EXACT) over a bmesh; others - list of bmesh, they get freed."""
     if not others:
         return bm
     ob = _tmp_obj(bm, "_bool")
@@ -300,7 +300,7 @@ def boolean(bm, others, op="DIFFERENCE"):
 
 
 def flat_face(pts3d, facing):
-    """Одиночная плоская грань, развёрнутая нормалью в сторону facing (Vector)."""
+    """A single flat face, oriented with its normal toward facing (Vector)."""
     bm = bmesh.new()
     f = bm.faces.new([bm.verts.new(p) for p in pts3d])
     bm.normal_update()
@@ -310,7 +310,7 @@ def flat_face(pts3d, facing):
 
 
 # =============================================================================
-# Материалы (Cycles) - только для детальной модели
+# Materials (Cycles) - detail model only
 # =============================================================================
 def node_mat(name):
     m = bpy.data.materials.new(name)
@@ -378,13 +378,13 @@ def load_image(path, noncolor=False):
     return _images[key]
 
 
-# Печать: картинка, спроецированная на грани, смотрящие в заданную сторону.
-# print_spec = dict(image=путь, rect=(a0, a1, b0, b1), axis="-Y"|"+X"|"-X"|"+Z"|"+Y")
-# rect - прямоугольник картинки в координатах модели на плоскости проекции:
-#   -Y (лицо):  a = x,  b = z (смотрящий спереди: x вправо)
-#   +Y (тыл):   a = -x, b = z (смотрящий сзади: -x вправо)
-#   -X (левый бок): a = -y, b = z;  +X (правый бок): a = y, b = z
-#   +Z (верх):  a = x,  b = -y (смотрящий сверху, перед рации внизу картинки)
+# Print: an image projected onto faces that face a given direction.
+# print_spec = dict(image=path, rect=(a0, a1, b0, b1), axis="-Y"|"+X"|"-X"|"+Z"|"+Y")
+# rect - the image rectangle in model coordinates on the projection plane:
+#   -Y (face): a = x,  b = z (viewed from the front: x to the right)
+#   +Y (back): a = -x, b = z (viewed from the rear: -x to the right)
+#   -X (left side): a = -y, b = z;  +X (right side): a = y, b = z
+#   +Z (top):  a = x,  b = -y (viewed from above, the radio's front is at the bottom of the image)
 PROJ = {
     "-Y": ((0, 1.0), (2, 1.0), Vector((0, -1, 0))),
     "+Y": ((0, -1.0), (2, 1.0), Vector((0, 1, 0))),
@@ -414,13 +414,13 @@ def _print_layer(nt, color, spec, tc, geo):
     tex.extension = "CLIP"
     tex.interpolation = "Cubic"
     nt.links.new(comb.outputs["Vector"], tex.inputs["Vector"])
-    # маска стороны: только грани, смотрящие туда же, куда проекция
+    # side mask: only faces that face the same direction as the projection
     dot = nt.nodes.new("ShaderNodeVectorMath")
     dot.operation = "DOT_PRODUCT"
     dot.inputs[1].default_value = facing
     nt.links.new(geo.outputs["Normal"], dot.inputs[0])
     side = _math(nt, "GREATER_THAN", dot.outputs["Value"], spec.get("min_dot", 0.6))
-    if spec.get("depth"):     # печать только на гранях в слое глубины (напр. крышки клавиш)
+    if spec.get("depth"):     # print only on faces within the depth band (e.g. key caps)
         comp = comps[{"-Y": 1, "+Y": 1, "-X": 0, "+X": 0, "+Z": 2}[spec["axis"]]]
         d0, d1 = spec["depth"]
         lo = _math(nt, "GREATER_THAN", comp, d0)
@@ -435,12 +435,12 @@ def _print_layer(nt, color, spec, tc, geo):
 def mat_worn(name, base, rough=(0.45, 0.65), metallic=0.0, dust=(0.16, 0.15, 0.13), edge_col=None,
              dust_amount=0.35, edge_amount=1.0, prints=(), soft_edges=0.0006, noise_bump=0.0, image=None,
              grime=None):
-    """Потёртый материал: вариация шероховатости, стёртые светлые кромки, печать, пыль в углублениях.
+    """Worn material: roughness variation, worn light edges, print, dust in recesses.
 
-    soft_edges - радиус узла Bevel, подключённого к нормали: при запекании нормалей острые
-    кромки детальной модели (в том числе от булевых вырезов) выходят мягко скруглёнными.
-    image - (путь, rect, axis): базовый цвет из картинки вместо плоского (ЖК-индикатор, шильдик).
-    grime - (цвет, доля, масштаб): пятна въевшейся грязи по шуму поверх всего (грязные рации)."""
+    soft_edges - radius of the Bevel node wired into the normal: when baking normals, sharp
+    edges of the detail model (including from boolean cuts) come out softly rounded.
+    image - (path, rect, axis): base color from an image instead of flat (LCD display, nameplate).
+    grime - (color, amount, scale): patches of ingrained dirt via noise over everything (dirty radios)."""
     m, nt, b = node_mat(name)
     N = nt.nodes
     tc = N.new("ShaderNodeTexCoord")
@@ -455,12 +455,12 @@ def mat_worn(name, base, rough=(0.45, 0.65), metallic=0.0, dust=(0.16, 0.15, 0.1
         nt.links.new(tc.outputs["Object"], n.inputs["Vector"])
         return n.outputs["Fac"]
 
-    # базовый цвет: плоский или из картинки
+    # base color: flat or from an image
     color = (*base, 1.0)
     if image:
         color, _ = _print_layer(nt, color, dict(image=image[0], rect=image[1], axis=image[2], min_dot=-2.0), tc, geo)
 
-    # стёртые кромки: нормаль узла Bevel расходится с настоящей
+    # worn edges: the Bevel node's normal diverges from the real one
     bev = N.new("ShaderNodeBevel")
     bev.inputs["Radius"].default_value = 0.0009
     dot = N.new("ShaderNodeVectorMath")
@@ -475,7 +475,7 @@ def mat_worn(name, base, rough=(0.45, 0.65), metallic=0.0, dust=(0.16, 0.15, 0.1
     for spec in prints:
         color, _ = _print_layer(nt, color, spec, tc, geo)
 
-    # пыль: полости (AO) + грани, смотрящие вверх
+    # dust: cavities (AO) + upward-facing faces
     ao = N.new("ShaderNodeAmbientOcclusion")
     ao.inputs["Distance"].default_value = 0.004
     ao.only_local = True
@@ -540,7 +540,7 @@ def mat_simple(name, color, rough, metallic=0.0, emission=None):
 
 
 def mat_image(name, path, rough=0.5, metallic=0.0):
-    """Материал с картинкой по UV (наклейка/лента: у неё своя развёртка 0..1)."""
+    """Material with an image mapped by UV (sticker/strap: it has its own 0..1 unwrap)."""
     m, nt, b = node_mat(name)
     tex = nt.nodes.new("ShaderNodeTexImage")
     tex.image = load_image(path)
@@ -551,7 +551,7 @@ def mat_image(name, path, rough=0.5, metallic=0.0):
 
 
 # =============================================================================
-# Модель: детали по уровням
+# Model: parts by level
 # =============================================================================
 class LodMesh:
     def __init__(self):
@@ -596,8 +596,8 @@ class LodMesh:
 
 
 class Model:
-    """Сборщик деталей одного уровня. q = 0 - детальная модель (объекты с материалами Cycles),
-    q = 1..4 - игровой лод (один меш с метками граней)."""
+    """Collector of parts for one level. q = 0 - detail model (objects with Cycles materials),
+    q = 1..4 - in-game LOD (a single mesh with face tags)."""
 
     def __init__(self, q, mats=None, collection=None):
         self.q = q
@@ -608,18 +608,18 @@ class Model:
         self.objects = []
 
     def s(self, *v):
-        """Значение по уровню: v[0] детальная, v[1] LOD1, ... (последнее тянется дальше)."""
+        """Value by level: v[0] detail, v[1] LOD1, ... (the last one carries on further)."""
         return v[min(self.q, len(v) - 1)]
 
     def upto(self, q_max):
-        """Деталь есть на этом уровне? (0 - только в детальной модели)."""
+        """Does the part exist at this level? (0 - detail model only)."""
         return self.q <= q_max
 
     def add(self, bm, mat="body", tag=T_GEN, name="part", bevel_=None, cuts=None, gmat=G_ATLAS, bake=True,
             auto_tag=True, smooth_deg=40.0, bevel_angle=30.0, label=False):
-        """bevel_ = (ширина, (сегменты по уровням)), например (0.001, (3, 1, 0)) - скругление в 3
-        сегмента на детальной, фаска на LOD1, без фаски дальше. cuts - список bmesh для вычитания
-        (строятся вызывающим уже под этот уровень)."""
+        """bevel_ = (width, (segments per level)), e.g. (0.001, (3, 1, 0)) - a 3-segment round
+        on the detail model, a chamfer on LOD1, no bevel further on. cuts - list of bmesh to
+        subtract (built by the caller already for this level)."""
         if bevel_:
             w, segs = bevel_
             sg = segs[min(self.q, len(segs) - 1)]
@@ -648,7 +648,7 @@ class Model:
 
 
 # =============================================================================
-# Студия и превью
+# Studio and preview
 # =============================================================================
 def studio(bg=(0.30, 0.30, 0.31)):
     sc = bpy.context.scene
@@ -709,7 +709,7 @@ def studio(bg=(0.30, 0.30, 0.31)):
 
 
 def aim(cam, yaw, pitch, dist, target):
-    """yaw - азимут (град, 0 - спереди, минус - слева), pitch - возвышение."""
+    """yaw - azimuth (degrees, 0 - front, negative - left), pitch - elevation."""
     t = Vector(target)
     y, p = math.radians(yaw), math.radians(pitch)
     cam.location = t + Vector((math.sin(y) * math.cos(p), -math.cos(y) * math.cos(p), math.sin(p))) * dist
@@ -737,7 +737,7 @@ def render(path, cam, yaw, pitch, dist, target, show=None, samples=96, res=1200)
 
 
 # =============================================================================
-# Развёртка
+# Unwrap
 # =============================================================================
 def select_only(ob):
     for o in bpy.context.view_layer.objects:
@@ -756,12 +756,12 @@ def _uv_area(f, uvl):
 
 
 def unwrap(ob, weights=None, angle=55.0, margin=0.004):
-    """Smart UV отдельно для каждой метки, затем плотность текселей по весам метки, затем упаковка.
+    """Smart UV separately for each tag, then texel density by tag weight, then packing.
 
-    Сначала каждая группа граней раскрывается отдельно (острова не смешивают метки), потом её
-    острова масштабируются так, чтобы площадь UV на квадратный метр была одинаковой для всех
-    групп и умноженной на вес^2 - лицо и клавиши крупнее, тыл и дно мельче, лента и стекло почти
-    ничего (у них своя текстура). pack_islands масштабирует всё одинаково, соотношение остаётся."""
+    First each face group is unwrapped separately (islands don't mix tags), then its islands
+    are scaled so that UV area per square meter is the same for all groups, multiplied by
+    weight^2 - face and keys bigger, back and bottom smaller, strap and glass almost nothing
+    (they have their own texture). pack_islands scales everything equally, the ratio is kept."""
     weights = weights or UV_WEIGHT
     select_only(ob)
     bpy.ops.object.mode_set(mode="EDIT")
@@ -792,9 +792,9 @@ def unwrap(ob, weights=None, angle=55.0, margin=0.004):
     for f in bm.faces:
         f.select = True
     bmesh.update_edit_mesh(ob.data)
-    # CONVEX, не CONCAVE: упаковщик по умолчанию кладёт мелкие острова в «дыры» крупных (в
-    # выемку клавиатуры внутри острова лица). Дальний лод, у которого лицо - одна большая грань
-    # без выемки, интерполирует UV через эту дыру и показывает чужие острова полосами.
+    # CONVEX, not CONCAVE: by default the packer drops small islands into the "holes" of big
+    # ones (into the keypad recess inside the face island). A far LOD, whose face is one big
+    # face with no recess, interpolates UV across that hole and shows other islands as streaks.
     try:
         bpy.ops.uv.pack_islands(rotate=True, margin_method="FRACTION", margin=margin, shape_method="CONVEX")
     except TypeError:
@@ -803,9 +803,10 @@ def unwrap(ob, weights=None, angle=55.0, margin=0.004):
 
 
 def transfer_uv(dst, src):
-    """Дальним лодам - UV с LOD1 (один атлас). Ближайшая точка ищется только среди граней LOD1
-    с той же меткой и той же доминирующей осью нормали, UV берётся барицентрически (скилл:
-    перенос по ближайшей грани без этого растягивает лицо на чужие острова)."""
+    """Give far LODs the UV from LOD1 (one atlas). The nearest point is searched only among
+    LOD1 faces with the same tag and the same dominant normal axis, and UV is taken
+    barycentrically (skill: transferring by nearest face without this stretches the face
+    across other islands)."""
     from mathutils.bvhtree import BVHTree
     from mathutils.geometry import barycentric_transform
 
@@ -831,10 +832,11 @@ def transfer_uv(dst, src):
     for (part, _b), tr in trees.items():
         by_part.setdefault(part, []).append(tr)
 
-    # Дальний лод сначала триангулируется, и каждый ЕГО треугольник целиком берёт аффинную
-    # развёртку одного треугольника LOD1 - ближайшего к своему центру (центр треугольника всегда
-    # на поверхности, а не в дыре). Поиск по каждой вершине отдельно давал угловой вершине большой
-    # грани остров фаски, и треугольник растягивался через полатласа полосами.
+    # The far LOD is triangulated first, and each of ITS triangles takes, as a whole, the affine
+    # unwrap of one LOD1 triangle - the one closest to its own center (a triangle's center is
+    # always on the surface, never in a hole). Searching per vertex separately gave the corner
+    # vertex of a big face the bevel's island, and the triangle got stretched in streaks across
+    # half the atlas.
     bm = bmesh.new()
     bm.from_mesh(dst.data)
     bmesh.ops.triangulate(bm, faces=bm.faces[:])
@@ -868,7 +870,7 @@ def transfer_uv(dst, src):
 
 
 # =============================================================================
-# Запекание
+# Baking
 # =============================================================================
 def use_gpu():
     prefs = bpy.context.preferences.addons["cycles"].preferences
@@ -921,8 +923,9 @@ def bake_maps(lod1, high, size, bake_dir, cage=0.0025, ray=0.006, passes_only=No
         return next((n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
 
     def emission_mat(name, value):
-        """Материал из одной эмиссии: проходы металла и покрытия не зависят от потёртостей, а
-        полный материал с узлами Bevel/AO на каждом сэмпле пускает свои лучи (металл шёл 6.5 мин)."""
+        """Material made of a single emission: the metal and coverage passes don't depend on
+        wear, whereas the full material with Bevel/AO nodes casts its own rays on every sample
+        (metal took 6.5 min)."""
         em = bpy.data.materials.get(name) or bpy.data.materials.new(name)
         if hasattr(em, "use_nodes"):
             em.use_nodes = True
@@ -957,8 +960,9 @@ def bake_maps(lod1, high, size, bake_dir, cage=0.0025, ray=0.006, passes_only=No
         bpy.context.view_layer.objects.active = tgt
 
     sc.world.light_settings.distance = 0.012
-    # Для AO материалы не нужны, а у потёртых их узлы Bevel и AO сами пускают лучи на каждый сэмпл:
-    # с ними проход AO 4096 шёл больше десяти минут. На время прохода - простой диффузный материал.
+    # AO doesn't need materials, and worn materials' own Bevel and AO nodes cast rays on every
+    # sample: with them the AO pass at 4096 took more than ten minutes. For the duration of the
+    # pass - a plain diffuse material.
     plain = bpy.data.materials.get("_BakePlain") or bpy.data.materials.new("_BakePlain")
     metal_of = {m.name: emission_mat("_BakeMetal_" + m.name, principled(m).inputs["Metallic"].default_value
                                      if principled(m) else 0.0) for m in mats}
@@ -991,9 +995,9 @@ def bake_maps(lod1, high, size, bake_dir, cage=0.0025, ray=0.006, passes_only=No
         elif name == "cover":
             saved = swap(lambda m: white)
         elif name == "albedo":
-            # У металла в Cycles нет диффузной части: хромированная плашка запекалась чёрной. Цвет
-            # металла нужен в _co как есть - блеск ему даёт _smdi, - поэтому на время прохода
-            # металличность снимается.
+            # Metal has no diffuse part in Cycles: a chrome plate baked out black. The metal's
+            # color is needed in _co as-is - _smdi gives it the shine - so metallic is removed
+            # for the duration of the pass.
             for m in mats:
                 b = principled(m)
                 if b and b.inputs["Metallic"].default_value > 0:
@@ -1012,12 +1016,12 @@ def bake_maps(lod1, high, size, bake_dir, cage=0.0025, ray=0.006, passes_only=No
 
 
 def pushpull(img, mask):
-    """Залить невалидные тексели средним по окрестности (пирамида «push-pull»).
+    """Fill invalid texels with the neighborhood average (a "push-pull" pyramid).
 
-    За пределами островов и их 24-пиксельных полей остаётся чёрная пустота, а дальний лод, у
-    которого крупная грань интерполирует UV через просвет между островами, показал бы её чёрным
-    пятном. Заливка усредняет валидные тексели по уровням пирамиды и подставляет среднее там,
-    где своих данных нет."""
+    Outside the islands and their 24-pixel padding a black void remains, and a far LOD, whose
+    big face interpolates UV across the gap between islands, would show it as a black patch.
+    The fill averages valid texels across pyramid levels and substitutes the average wherever
+    there is no data of its own."""
     h, w = mask.shape
     levels = []
     c = img * mask[..., None]
@@ -1035,8 +1039,8 @@ def pushpull(img, mask):
 
 
 def fill_empty(b):
-    """Заполнить всё, куда запекание не дотянулось (по карте покрытия): нормали - плоскими,
-    остальное - средним соседей."""
+    """Fill in everything the bake didn't reach (per the coverage map): normals - flat,
+    everything else - the average of the neighbors."""
     if "cover" not in b:
         return b
     mask = b["cover"][..., 0] > 0.5
@@ -1051,7 +1055,7 @@ def fill_empty(b):
 
 
 # =============================================================================
-# Текстуры
+# Textures
 # =============================================================================
 def down2(a):
     h, w = a.shape[:2]
@@ -1064,7 +1068,7 @@ def to_srgb(x):
 
 
 def save_png(path, rgb):
-    """RGB 0..1, строки снизу вверх (буфер Blender) -> 8-битный PNG без преобразований."""
+    """RGB 0..1, rows bottom-to-top (Blender buffer) -> 8-bit PNG with no conversions."""
     h, w = rgb.shape[:2]
     img = bpy.data.images.new(os.path.basename(path), w, h, alpha=False)
     rgba = np.ones((h, w, 4), np.float32)
@@ -1083,9 +1087,9 @@ def make_textures(b, out_dir, stem, ao_min=0.5, out_size=2048):
         alb, ao, rough, metal, nrm = (down2(x) for x in (alb, ao, rough, metal, nrm))
     shade = ao_min + (1 - ao_min) * ao[..., :1]
     save_png(os.path.join(out_dir, stem + "_co.png"), to_srgb(alb * shade))
-    # Нормали - вдвое меньше цвета (1024 при атласе 2048), как _smdi: разницы на рации в руке не
-    # видно, а весит карта вчетверо меньше (3.3 -> 0.85 МБ; решение пользователя 25.09). Векторы
-    # после уменьшения нормируются заново - усреднение укорачивает их.
+    # Normals - half the resolution of color (1024 for a 2048 atlas), like _smdi: no visible
+    # difference on the radio in hand, and the map weighs four times less (3.3 -> 0.85 MB; the
+    # owner's decision, 25.09). Vectors are renormalized after downscaling - averaging shortens them.
     n = down2(nrm) * 2 - 1
     n /= np.maximum(np.linalg.norm(n, axis=-1, keepdims=True), 1e-6)
     save_png(os.path.join(out_dir, stem + "_nohq.png"), n * 0.5 + 0.5)
@@ -1108,7 +1112,7 @@ def to_paa(src_png, dst_paa):
 
 
 # =============================================================================
-# rvmat и model.cfg
+# rvmat and model.cfg
 # =============================================================================
 def _stage(i, tex):
     return ("class Stage%d\n{\n\ttexture = \"%s\";\n\tuvSource = \"tex\";\n\tclass uvTransform\n\t{\n"
@@ -1118,8 +1122,8 @@ def _stage(i, tex):
 
 def write_rvmat(path, nohq, smdi, mc="#(argb,8,8,3)color(0,0,0,0,MC)", specular=0.75, power=100.0,
                 fresnel="#(ai,64,64,1)fresnel(1,1.05)", ambient=0.75):
-    """Super, как ванильная walkietalkie.rvmat (ambient/diffuse 0.75, specular 0.745/100). Без //-комментариев:
-    парсер Bohemia их не принимает (скилл: models.md)."""
+    """Super, like the vanilla walkietalkie.rvmat (ambient/diffuse 0.75, specular 0.745/100). No //-comments:
+    the Bohemia parser rejects them (skill: models.md)."""
     s = ("ambient[] = {%.2f,%.2f,%.2f,1.0};\ndiffuse[] = {%.2f,%.2f,%.2f,1.0};\nforcedDiffuse[] = {0.0,0.0,0.0,0.0};\n"
          "emmisive[] = {0.0,0.0,0.0,1.0};\nspecular[] = {%.3f,%.3f,%.3f,1.0};\nspecularPower = %.1f;\n"
          "PixelShaderID = \"Super\";\nVertexShaderID = \"Super\";\n"
@@ -1135,7 +1139,7 @@ def write_rvmat(path, nohq, smdi, mc="#(argb,8,8,3)color(0,0,0,0,MC)", specular=
 
 
 def write_model_cfg(path, classes):
-    """classes: {имя p3d: [секции]}. Имя класса = имя файла p3d без расширения."""
+    """classes: {p3d name: [sections]}. Class name = p3d file name without the extension."""
     s = ("// Model configuration: one CfgModels class per p3d (name = file name). A model with no\n"
          "// class of its own silently falls back to Default. sections[] lists the hidden\n"
          "// selections config.cpp may retexture - here the range label on the case.\n\n"
@@ -1153,7 +1157,7 @@ def write_model_cfg(path, classes):
 # p3d
 # =============================================================================
 def conv(v):
-    """Blender -> DayZ: (x, z, y). Лицо -Y -> -Z, как у ванильной рации."""
+    """Blender -> DayZ: (x, z, y). Face -Y -> -Z, like the vanilla radio."""
     return (v[0], v[2], v[1])
 
 
@@ -1162,7 +1166,7 @@ def conv_dir(v):
 
 
 def visual_lod(ob, resolution, tex, label=None):
-    """tex: {слот: (текстура, rvmat)}; label: dict(origin, u, v) - кадр плоской развёртки ленты."""
+    """tex: {slot: (texture, rvmat)}; label: dict(origin, u, v) - frame of the strap's flat unwrap."""
     me = ob.data.copy()
     bm = bmesh.new()
     bm.from_mesh(me)
@@ -1223,7 +1227,7 @@ def hull(points):
 
 
 def geometry_lod(resolution, comps, mass=None, props=()):
-    """comps: [(точки в пространстве Blender, rvmat пробития или "")] - по выпуклой оболочке на компоненту."""
+    """comps: [(points in Blender space, penetration rvmat or "")] - one convex hull per component."""
     pts, normals, faces, spans = [], [], [], []
     for comp_pts, mat in comps:
         hp, tris, vn = hull(comp_pts)
@@ -1264,8 +1268,9 @@ def mesh_points(ob):
 
 
 def prepare_model_root(name):
-    """Корень сборки моделей (build.project_root): своя папка с MLOD и копией model.cfg, данные мода и
-    ванильный dz - junction'ами (скилл: models.md, 'Building models with dayz-mcp asset_build')."""
+    """Model build root (build.project_root): its own folder with the MLOD and a copy of
+    model.cfg, the mod data and vanilla dz - via junctions (skill: models.md, 'Building models
+    with dayz-mcp asset_build')."""
     import _winapi
     import shutil
     src = os.path.join(MODEL_ROOT, MOD, "model", name)
@@ -1280,10 +1285,10 @@ def prepare_model_root(name):
 
 
 # =============================================================================
-# Прогон: одна рация от деталей до p3d
+# Run: one radio from parts to p3d
 # =============================================================================
 def set_planar_uv(ob, frame):
-    """Плоская развёртка 0..1 по кадру ленты (origin, u, v) - для превью детальной модели."""
+    """Flat 0..1 unwrap by the strap frame (origin, u, v) - for the detail model preview."""
     me = ob.data
     uv = me.uv_layers.new(name="UVMap")
     o, u, v = Vector(frame["origin"]), Vector(frame["u"]), Vector(frame["v"])
@@ -1294,7 +1299,7 @@ def set_planar_uv(ob, frame):
 
 
 def game_preview_material(stem, tex_dir):
-    """Материал превью игровой модели из готовых _co/_nohq/_smdi (нормали DirectX -> OpenGL)."""
+    """Preview material for the in-game model, built from the finished _co/_nohq/_smdi (normals DirectX -> OpenGL)."""
     m, nt, b = node_mat("M_Preview_" + stem)
     N = nt.nodes
     co = N.new("ShaderNodeTexImage")
@@ -1324,8 +1329,8 @@ def game_preview_material(stem, tex_dir):
 
 
 def run(spec):
-    """spec: name, stem, build(m), materials() -> {имя: материал}, label (dict origin/u/v, classes,
-    default), collision(lods) -> (geom comps, view comps, fire comps), mass, previews [(имя, yaw, pitch,
+    """spec: name, stem, build(m), materials() -> {name: material}, label (dict origin/u/v, classes,
+    default), collision(lods) -> (geom comps, view comps, fire comps), mass, previews [(name, yaw, pitch,
     dist, target)], bake=dict(cage, ray, size), sharp_deg, body_top."""
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     skip_bake = "--skip-bake" in argv
@@ -1420,8 +1425,9 @@ def run(spec):
     cx, cy, cz = (bx0 + bx1) / 2, (by0 + by1) / 2, (bz0 + bz1) / 2
     r = 0.5 * math.sqrt((bx1 - bx0) ** 2 + (by1 - by0) ** 2 + (bz1 - bz0) ** 2)
     body_top = spec.get("body_top", by1)
-    # invView - КАМЕРА превью (скилл: models.md): спереди-слева, как у ванильной рации, чей общий
-    # габарит (он включает точки памяти) уходит до x -0.11 и z -0.27 - камера перед лицом (-Z)
+    # invView - preview CAMERA (skill: models.md): front-left, like the vanilla radio, whose
+    # overall envelope (it includes memory points) extends to x -0.11 and z -0.27 - camera
+    # in front of the face (-Z)
     p3d_lods.append(memory_lod({
         "invView": (cx - 0.10, body_top * 0.55, bz0 - 0.26),
         "boundingbox_min": (bx0, by0, bz0),
@@ -1430,10 +1436,11 @@ def run(spec):
         "ce_radius": (cx + r, cy, cz),
         "throwingimpulseposition": (cx, body_top * 0.5, cz),
     }))
-    # Сдвиг в хвате: хват рации в руке и слот на лямке держатся за начало координат модели, так
-    # что сдвинуть рацию в руке можно только сдвинув всю модель относительно начала (+ - к антенне).
-    # Сдвигается только p3d: сцена Blender остаётся как есть, иначе разъехались бы картинки окна
-    # частот (render_hud_faces снимает LOD1 из _game.blend). Лямка сдвигается вместе с рукой.
+    # Grip shift: the hand grip and the strap slot are anchored to the model's origin, so the
+    # only way to shift the radio in the hand is to shift the whole model relative to the origin
+    # (+ toward the antenna). Only the p3d is shifted: the Blender scene stays as it is, otherwise
+    # the frequency window images would go out of sync (render_hud_faces captures LOD1 from
+    # _game.blend). The strap shifts together with the hand.
     shift = spec.get("grip_shift", 0.0)
     if shift:
         for lod in p3d_lods:
@@ -1451,8 +1458,8 @@ def run(spec):
         pm = game_preview_material(stem, game_tex)
         lab_m = mat_image("M_PrevLabel", os.path.join(tex_src, "label_%s.png" % lab["default"])) if lab else pm
         for ob in lods:
-            # слоты заменяются на месте: materials.clear() сбросил бы номера материалов у граней,
-            # и лента в превью брала бы атлас (чёрное пятно)
+            # slots are replaced in place: materials.clear() would reset the material indices on
+            # the faces, and the strap in the preview would pick up the atlas (a black patch)
             ob.data.materials[G_ATLAS] = pm
             ob.data.materials[G_LABEL] = lab_m
             ob.data.materials[G_GLASS] = pm

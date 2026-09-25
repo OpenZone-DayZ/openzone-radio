@@ -1,6 +1,6 @@
-"""Печать рации на 50..250 м: подписи кнопок, ЖКИ с трещиной, наклейка тыла, ленты дальности.
+"""Prints for the 50..250 m radio: button captions, cracked LCD, back label, range bands.
 
-    python make_prints_t388.py          (системный Python с Pillow)
+    python make_prints_t388.py          (system Python with Pillow)
 """
 import math
 import os
@@ -27,8 +27,8 @@ def power_icon(cv, x, z, s, fill):
 
 
 def front():
-    """Подписи кнопок - своим слоем с лёгким износом: общий износ щитка выедал целые буквы (L у
-    CALL, T у TALK, N у MON), и на кнопках они читались обрезанными. У референса они целы."""
+    """Button captions get their own layer with light wear: the shield's overall wear was eating
+    whole letters (the L in CALL, the T in TALK, the N in MON), so on the buttons they read as clipped. In the reference they are intact."""
     keys = T.Canvas(*L.FRONT_RECT, ppm=L.PPM)
     for x, z, rx, rz, mat, txt in L.BUTTONS:
         if txt == "pwr":
@@ -39,14 +39,14 @@ def front():
             keys.text(txt, x, z, 0.0019, "arial_b", (150, 150, 146, 255))
         elif mat in ("btn_blue",):
             keys.text(txt, x, z, 0.0009, "arial_b", LIGHT)
-        elif rx == rz:                      # круглые SCAN / MENU: надпись во всю кнопку, но не на скругление
+        elif rx == rz:                      # round SCAN / MENU: the label spans the whole button but not the bevel
             keys.text(txt, x, z, 0.00105, "arial_b", LIGHT)
         else:
             keys.text(txt, x, z, min(0.0019, rz * 0.62), "arial_b", LIGHT)
     face = T.Canvas(*L.FRONT_RECT, ppm=L.PPM)
-    # имя модели на щитке - в полосе между маркой и ЖКИ (место указал пользователь 25.09);
-    # чёрным: серое на сером щитке не читалось
-    # марка на щитке над ЖКИ - своим слоем: износ щитка (0.40) съел бы её почти целиком
+    # model name on the shield - in the strip between the brand and the LCD (position specified by
+    # the owner on 25.09); in black: grey on the grey shield wasn't legible
+    # brand on the shield above the LCD - its own layer: the shield's wear (0.40) would eat it almost entirely
     brand = T.Canvas(*L.FRONT_RECT, ppm=L.PPM)
     T.brand(brand, 0.0, L.BRAND_Z, 0.0021, DARKINK, T.BRAND_ACCENT)
     brand.text(" ".join(L.MODEL), 0.0, L.MODEL_Z, 0.0019, "arial", (10, 10, 12, 255), fit=0.0170)
@@ -58,13 +58,13 @@ def front():
 
 
 def lcd():
-    """Выключенный ЖКИ с трещиной по стеклу слева, грязь в углах."""
+    """Powered-off LCD with a crack in the glass on the left, grime in the corners."""
     bg, cv = T.lcd_canvas(L.LCD_RECT, L.PPM, (108, 114, 104), (64, 66, 58), vignette=0.55, blur=30)
     x0, x1, z0, z1 = L.LCD_RECT
     ghost = (40, 44, 38, 34)
     T.seg7_text(cv, "88", x0 + (x1 - x0) * 0.30, z0 + (z1 - z0) * 0.22, (z1 - z0) * 0.50, on=ghost, ghost=ghost)
     T.seg7_text(cv, "88", x0 + (x1 - x0) * 0.72, z0 + (z1 - z0) * 0.22, (z1 - z0) * 0.26, on=ghost, ghost=ghost)
-    # трещина: ломаные лучи из точки удара
+    # crack: jagged rays from the point of impact
     rng = random.Random(8)
     cx, cz = x0 + (x1 - x0) * 0.14, z0 + (z1 - z0) * 0.62
     for k in range(7):
@@ -89,11 +89,11 @@ def back():
     cv.text("OPEN", 0.0, d["z0"] + 0.0045, 0.0018, "arial_b", ink)
     cv.tri(0.0, d["z0"] + 0.0020, 0.0022, up=False, fill=ink)
     cv.text("3 x AAA  1.5V", 0.0, zc + 0.006, 0.0022, "arial_b", ink)
-    for i, dx in enumerate((-0.012, 0.0, 0.012)):      # батарейки: контуры с полярностью
+    for i, dx in enumerate((-0.012, 0.0, 0.012)):      # batteries: outlines with polarity marks
         cv.rect(dx - 0.0045, zc - 0.012, dx + 0.0045, zc + 0.002, outline=ink, width=0.00025, r=0.001)
         cv.text("+" if i % 2 == 0 else "-", dx, zc - 0.001, 0.0022, "arial_b", ink)
         cv.text("-" if i % 2 == 0 else "+", dx, zc - 0.010, 0.0022, "arial_b", ink)
-    # на крышке, под клипсой: над крышкой теперь проходит шов корпуса
+    # on the door, under the clip: the body seam now runs above the door
     cv.text("PMR446  8 CH  0.5W", 0.0, zc + 0.0115, 0.0015, "arial_b", ink)
     img = T.wear_print(cv.img, amount=0.5, seed=5, cell=100, scratches=90)
     img.save(os.path.join(OUT, "print_back.png"))

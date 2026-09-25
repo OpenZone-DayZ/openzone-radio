@@ -1,37 +1,37 @@
-"""Раскладка рации на 1000 м (по мотивам Baofeng UV-5R) - общие числа для геометрии и печати.
+"""Layout of the 1000 m radio (modeled after the Baofeng UV-5R) - shared numbers for geometry and printing.
 
-Чистый Python без bpy и PIL: его читают и build_uv5r.py (Blender), и make_prints_uv5r.py (Pillow).
+Plain Python with no bpy or PIL: it is read by both build_uv5r.py (Blender) and make_prints_uv5r.py (Pillow).
 
-Координаты модели: X вправо, Y назад (лицо смотрит в -Y), Z вверх, метры; начало - центр дна.
-Пропорции сняты с фронтального рендера референса (pad1s, 1920x1080): корпус 420 px в ширину
-при 58 мм реальной ширины UV-5R даёт 0.138 мм/px; высота корпуса 759 px -> 105 мм.
+Model coordinates: X right, Y back (the face looks toward -Y), Z up, meters; origin - center of the bottom.
+Proportions were taken from a front-view render of the reference (pad1s, 1920x1080): the body is 420 px wide;
+at the UV-5R's real width of 58 mm that gives 0.138 mm/px; the body height of 759 px -> 105 mm.
 """
 
-MODEL = "БАЛАБОЛКА"   # имя модели OZ-COM (выбор пользователя 25.09); плашка под ним - 17 мм
+MODEL = "БАЛАБОЛКА"   # OZ-COM model name (the owner's choice, 25.09); the plate below it - 17 mm
 
-# --- корпус -------------------------------------------------------------------
-W = 0.058            # ширина передней оболочки
-H = 0.105            # высота оболочки (дно..верх)
-YF = -0.016          # плоскость лица
-YB = 0.005           # тыл передней оболочки (дальше - аккумулятор)
-R_FRONT, R_BACK = 0.0025, 0.0030   # скругление вертикальных рёбер в плане
-BEV_TB = 0.0016      # скругление верхней и нижней кромок
+# --- body -------------------------------------------------------------------
+W = 0.058            # width of the front shell
+H = 0.105            # shell height (bottom..top)
+YF = -0.016          # face plane
+YB = 0.005           # back of the front shell (beyond it - the battery)
+R_FRONT, R_BACK = 0.0025, 0.0030   # rounding of the vertical edges in plan view
+BEV_TB = 0.0016      # rounding of the top and bottom edges
 
-# --- аккумулятор и клипса ------------------------------------------------------
+# --- battery and clip ------------------------------------------------------
 BAT_W, BAT_Y0, BAT_Y1, BAT_TOP = 0.055, YB, 0.016, 0.081
 CLIP_W = 0.027
 CLIP_TOP, CLIP_BOT = 0.073, 0.017
 
-# --- блок дисплея ---------------------------------------------------------------
+# --- display block ---------------------------------------------------------------
 LCD_BLOCK = dict(w=0.0545, z0=0.0785, z1=H, r=0.003, proud=0.0018)
 LCD_WIN = dict(cx=0.0005, cz=0.0915, w=0.0466, h=0.0180, r=0.0015, depth=0.0012)
 
-# --- решётка динамика: ряды прорезей-чёрточек -----------------------------------
+# --- speaker grille: rows of dash-shaped slots -----------------------------------
 GRILLE = dict(x0=-0.0165, x1=0.0212, z0=0.0495, z1=0.0745, slot_w=0.0030, slot_h=0.0011,
               pitch_x=0.0050, pitch_z=0.0031, depth=0.0008)
-GRILLE_SKIP = [(-0.0275, -0.0095, 0.0650, 0.0760)]    # под кнопкой VFO/MR прорезей нет
+GRILLE_SKIP = [(-0.0275, -0.0095, 0.0650, 0.0760)]    # no slots under the VFO/MR button
 
-# --- кнопки лицевой панели: (x, z, w, h, r, цвет-материал, надпись) ------------
+# --- front panel buttons: (x, z, w, h, r, color-material, label) ------------
 BUTTONS = [
     (-0.0193, 0.0700, 0.0145, 0.0070, 0.0030, "btn_orange", "VFO/MR"),
     (-0.0207, 0.0462, 0.0070, 0.0040, 0.0010, "btn_blue", "A/B"),
@@ -41,12 +41,12 @@ LED = (-0.0214, 0.0614, 0.0036)
 BRAND_PLATE = (0.0005, 0.0440, 0.0276, 0.0048, 0.0008)
 MODEL_PLATE = (0.0, 0.0056, 0.0170, 0.0042, 0.0006)
 
-# --- клавиатура 4x4 -----------------------------------------------------------------
+# --- 4x4 keypad -----------------------------------------------------------------
 KEYPAD = dict(x0=-0.0265, x1=0.0265, z0=0.0085, z1=0.0400, r=0.002, depth=0.0008)
 KEY_W, KEY_H, KEY_R = 0.0090, 0.0052, 0.0012
 KEY_COLS = (-0.0181, -0.0061, 0.0061, 0.0181)
 KEY_ROWS = (0.0325, 0.0256, 0.0187, 0.0118)
-KEY_PROUD = 0.0010    # над плоскостью лица (над дном выемки - на KEYPAD.depth больше)
+KEY_PROUD = 0.0010    # above the face plane (above the recess floor - larger by KEYPAD.depth)
 KEYS = [
     [("MENU", ""), ("^", ""), ("v", ""), ("EXIT", "")],
     [("1", "STEP"), ("2", "TXP"), ("3", "SAVE"), ("*", "SCAN")],
@@ -54,23 +54,23 @@ KEYS = [
     [("7", "TDR"), ("8", "BEEP"), ("9", "TOT"), ("#", "key")],
 ]
 
-# --- верх ------------------------------------------------------------------------
+# --- top ------------------------------------------------------------------------
 KNOB = dict(x=0.0128, y=-0.0045, r=0.0078, z0=H + 0.0012, h=0.0110, teeth=24)
 ANT = dict(x=-0.0125, y=-0.0040, nut_r=0.0045, boot_r=0.0059, whip_r0=0.0047, whip_r1=0.0031,
            z_nut=H + 0.0030, z_boot=H + 0.0135, top=H + 0.180)
 TORCH = dict(x=0.0, y=-0.0100, r=0.0027)
 
-# --- бока: (y-центр, z0, z1, ширина по y, выступ) ------------------------------------
+# --- sides: (y-center, z0, z1, width along y, protrusion) ------------------------------------
 PTT = (-0.0060, 0.0575, 0.0805, 0.0102, 0.0022)
 CALL = (-0.0060, 0.0855, 0.0930, 0.0085, 0.0015)
 MONI = (-0.0060, 0.0455, 0.0540, 0.0085, 0.0015)
 JACK = (-0.0050, 0.0620, 0.0880, 0.0110, 0.0014)
 
-# --- холсты печати: прямоугольники в координатах проекции (см. radiokit.PROJ) ---------
-PPM = 40              # пикселей на мм
-FRONT_RECT = (-W / 2, W / 2, 0.0, H)                 # лицо: a = x, b = z
-BACK_RECT = (-BAT_W / 2, BAT_W / 2, 0.0, BAT_TOP)    # тыл аккумулятора: a = -x, b = z
-LEFT_RECT = (-0.008, 0.020, 0.040, 0.100)            # левый бок: a = -y (перед справа), b = z
+# --- print canvases: rectangles in projection coordinates (see radiokit.PROJ) ---------
+PPM = 40              # pixels per mm
+FRONT_RECT = (-W / 2, W / 2, 0.0, H)                 # face: a = x, b = z
+BACK_RECT = (-BAT_W / 2, BAT_W / 2, 0.0, BAT_TOP)    # back of the battery: a = -x, b = z
+LEFT_RECT = (-0.008, 0.020, 0.040, 0.100)            # left side: a = -y (front is on the right), b = z
 LCD_RECT = (LCD_WIN["cx"] - LCD_WIN["w"] / 2, LCD_WIN["cx"] + LCD_WIN["w"] / 2,
             LCD_WIN["cz"] - LCD_WIN["h"] / 2, LCD_WIN["cz"] + LCD_WIN["h"] / 2)
 

@@ -1,6 +1,6 @@
-"""Печать рации на 5000 м: логотип и марка, клавиатура, джойстик, ЖКИ, метки ручек, наклейка, лента.
+"""Print set for the 5000 m radio: logo and brand, keypad, joystick, LCD, knob markings, sticker, strip.
 
-    python make_prints_xts.py          (системный Python с Pillow)
+    python make_prints_xts.py          (system Python with Pillow)
 """
 import os
 import random
@@ -26,7 +26,7 @@ def front():
     g = L.LOGO
     T.brand(cv, 0.0, g["z"] + 0.0010, 0.0026, WHITE, T.BRAND_ACCENT)
     cv.text(L.MODEL, 0.0115, g["z"] - 0.0034, 0.0020, "din", PURPLE)
-    # точки на программируемых клавишах
+    # dots on the programmable keys
     for i, (x, z) in enumerate(L.SOFTKEYS):
         for k in range(i + 1):
             cv.ellipse(x + (k - i / 2) * 0.0012, z, 0.00038, 0.00038, fill=(150, 140, 220, 255))
@@ -55,7 +55,7 @@ def front():
 
 
 def top():
-    """Метки на торцах ручек и подписи тумблера (смотрим сверху, перед внизу)."""
+    """Markings on the knob ends and toggle labels (viewed from above, front at the bottom)."""
     cv = T.Canvas(*L.TOP_RECT, ppm=L.PPM)
     v, c = L.VOL, L.CHAN
     cv.line([(v["x"], -v["y"] + 0.0010), (v["x"], -v["y"] + v["r"] * 0.9)], WHITE, 0.0007)
@@ -67,7 +67,7 @@ def top():
 
 
 def lcd():
-    """Выключенный точечный ЖКИ: надписи не светятся, лишь чуть темнее поля."""
+    """Powered-off dot-matrix LCD: the labels don't glow, just a bit darker than the field."""
     bg, cv = T.lcd_canvas(L.LCD_RECT, L.PPM, (92, 108, 56), (60, 72, 36), vignette=0.55, blur=40)
     x0, x1, z0, z1 = L.LCD_RECT
     ghost = (30, 40, 18, 15)

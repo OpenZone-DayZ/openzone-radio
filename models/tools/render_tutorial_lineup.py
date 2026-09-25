@@ -1,10 +1,10 @@
-"""Линейка для туториала: те же шесть раций, что в render_lineup.py, но на прозрачном фоне.
+"""Lineup for the tutorial: the same six radios as in render_lineup.py, but on a transparent background.
 
     blender -b -P tools/render_tutorial_lineup.py -- [out_dir]
 
-Пишет в build/tutorial: lineup.png (RGBA, тень на ловце теней остаётся полупрозрачной) и
-lineup.json - где на кадре низ и верх корпуса каждой рации, чтобы подписи под ними ставил
-tools/render_tutorial.py, а не подбирали руками.
+Writes into build/tutorial: lineup.png (RGBA, the shadow on the shadow catcher stays semi-transparent) and
+lineup.json - where in the frame the bottom and top of each radio's body are, so that
+tools/render_tutorial.py places the captions under them instead of them being picked by hand.
 """
 import json
 import os
@@ -55,8 +55,8 @@ sc.render.image_settings.color_mode = "RGBA"
 sc.render.filepath = os.path.join(OUT, "lineup.png")
 bpy.ops.render.render(write_still=True)
 
-# Низ корпуса - середина нижней передней кромки, верх - верх корпуса по той же оси, без антенны:
-# антенна у всех торчит выше и сбоку, подпись к ней не привязывают.
+# Bottom of the body - the middle of the lower front edge, top - the top of the body on the same axis, without the antenna:
+# on every radio the antenna sticks up higher and to the side, and the caption is not tied to it.
 W, H = sc.render.resolution_x, sc.render.resolution_y
 marks = {}
 for r, ob in zip(RADIOS, objs):

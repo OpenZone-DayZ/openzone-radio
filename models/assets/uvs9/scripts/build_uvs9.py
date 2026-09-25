@@ -1,10 +1,10 @@
-"""Рация на 2000 м (по мотивам Baofeng UV-S9, олива): детальная модель, лоды, запекание, p3d.
+"""Radio with 2000 m range (modeled after the Baofeng UV-S9, olive): detailed model, LODs, baking, p3d.
 
     python make_prints_uvs9.py
     blender -b -P build_uvs9.py -- [--high-only] [--skip-bake] [--no-previews]
 
-Оливковый корпус-бампер и тёмные накладки поверх: клавиатура, решётка, рамка ЖКИ. Геометрией до
-LOD2 - накладки, клавиши, кнопки, ручка, антенна, PTT, заглушка; прорези решётки - до LOD1.
+Olive bumper body with dark overlays on top: keypad, grille, LCD frame. Kept as geometry down to
+LOD2 - overlays, keys, buttons, the knob, antenna, PTT, jack cover; grille slots - down to LOD1.
 """
 import math
 import os
@@ -66,7 +66,7 @@ def shell(m):
     bm = K.prism(prof, 0.0, L.H, "Z")
     cuts = None
     if m.hi:
-        # бамперные канавки по бокам: длинная выемка у низа, как на референсе
+        # bumper grooves on the sides: a long recess near the bottom, like in the reference
         cuts = [K.prism(K.rrect(0.010, 0.030, 0.004, -0.004, 0.018, seg=6), -L.W / 2 - 0.002, -L.W / 2 + 0.0012, "X"),
                 K.prism(K.rrect(0.010, 0.030, 0.004, -0.004, 0.018, seg=6), L.W / 2 - 0.0012, L.W / 2 + 0.002, "X")]
     m.add(bm, "body", name="Shell", bevel_=(L.BEV_TB, (5, 2, 1, 0)), cuts=cuts, bevel_angle=45.0)
@@ -114,7 +114,7 @@ def keys(m):
             bm = K.prism(K.rrect(L.KEY_W, L.KEY_H, L.KEY_R, x, z, seg=m.s(4, 2, 0)), base + 0.0004,
                          base - L.KEY_PROUD, "Y")
             m.add(bm, "keys", tag=K.T_KEYS, name="Key", bevel_=(0.0008, (3, 1, 0)), bevel_angle=60.0)
-    # BAND - на нижней кромке решётки
+    # BAND - on the bottom edge of the grille
     x, z, w, h = L.BAND_BTN
     gbase = L.YF - L.GRILLE_DECK["proud"]
     m.add(K.prism(K.rrect(w, h, 0.0012, x, z, seg=m.s(4, 2, 0)), gbase + 0.0008, gbase - 0.0016, "Y"), "keys",
@@ -133,7 +133,7 @@ def column_buttons(m):
         if not m.upto(2):
             continue
         cuts = None
-        if m.hi and mat == "btn_grey":      # фонарь: рифлёная клавиша
+        if m.hi and mat == "btn_grey":      # flashlight: a knurled key
             cuts = [K.merge(*[K.prism(K.rect(w + 0.001, 0.00045, x, z - h / 2 + 0.0008 + i * 0.0009),
                                       L.YF - 0.0016 + 0.0003, L.YF - 0.004, "Y") for i in range(5)])]
         bm = K.prism(K.rrect(w, h, 0.0014, x, z, seg=m.s(4, 2, 0)), L.YF + 0.0004, L.YF - 0.0016, "Y")
@@ -159,7 +159,7 @@ def antenna(m):
     zb, zt = a["z_boot"], a["top"]
     if m.hi:
         prof = [(0.0, L.H - 0.001), (a["boot_r"], L.H - 0.001)]
-        for i in range(5):                    # толстые рёбра основания, как на референсе
+        for i in range(5):                    # thick base ribs, like in the reference
             z = L.H + 0.0030 + i * 0.0036
             prof += [(a["boot_r"], z - 0.0010), (a["boot_r"] - 0.0010, z - 0.0004), (a["boot_r"] - 0.0010, z + 0.0004),
                      (a["boot_r"], z + 0.0010)]
@@ -180,7 +180,7 @@ def antenna(m):
 
 
 def sides(m):
-    # PTT слева
+    # PTT on the left
     if m.upto(2):
         yc, z0, z1, wy, proud = L.PTT
         xs = -L.W / 2
@@ -190,7 +190,7 @@ def sides(m):
             cuts = [K.merge(*[K.prism(K.rect(wy + 0.002, 0.0006, yc, z0 + (z1 - z0) * (i + 1) / 8),
                                       xs - proud + 0.0004, xs - proud - 0.002, "X") for i in range(7)])]
         m.add(bm, "rubber", name="PTT", bevel_=(0.0010, (3, 1, 0)), cuts=cuts, bevel_angle=60.0)
-        # заглушка гарнитуры справа
+        # headset jack cover on the right
         yc, z0, z1, wy, proud = L.JACK
         xs = L.W / 2
         bm = K.prism(K.rrect(wy, z1 - z0, 0.0025, yc, (z0 + z1) / 2, seg=m.s(5, 2, 0)), xs - 0.0015, xs + proud, "X")
@@ -210,8 +210,8 @@ def battery(m):
 
 
 def clip_offset(z):
-    """Отход пластины клипсы от корпуса: чистый сдвиг, пластина остаётся ПЛОСКОЙ. Изгиб делал
-    неплоскую n-угольную крышку, и её триангуляция складкой давала тёмный «ромб» посередине."""
+    """Offset of the clip plate from the body: a pure shift, the plate stays FLAT. Bending produced
+    a non-flat n-gon cap, and its fold triangulation gave a dark "diamond" in the middle."""
     return 0.0036 * (L.CLIP_TOP - z) / (L.CLIP_TOP - L.CLIP_BOT)
 
 
@@ -274,7 +274,7 @@ SPEC = dict(
     materials=materials,
     collision=collision,
     mass=0.30,
-    grip_shift=0.03,           # сдвиг в хвате руки, м (+ к антенне), по просьбе пользователя 25.09
+    grip_shift=0.03,           # shift in the hand grip, m (+ toward the antenna), at the owner's request, 25.09
     body_top=L.H,
     previews=[
         ("front", 0, 4, 0.82, (0.0, 0.0, 0.150)),

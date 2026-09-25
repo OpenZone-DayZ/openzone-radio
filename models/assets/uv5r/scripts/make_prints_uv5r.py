@@ -1,9 +1,9 @@
-"""Печать рации на 1000 м: надписи лица, ЖК-индикатор, бок, наклейка аккумулятора, лента дальности.
+"""Print set for the 1000 m radio: face labels, LCD indicator, side, battery sticker, range strip.
 
-    python make_prints_uv5r.py          (системный Python с Pillow)
+    python make_prints_uv5r.py          (system Python with Pillow)
 
-Всё рисуется по числам layout_uv5r.py, поэтому надписи ложатся на кнопки без подгонки.
-Результат - ../textures/*.png; build_uv5r.py проецирует их на детальную модель.
+Everything is drawn from the numbers in layout_uv5r.py, so the labels land on the buttons without adjustment.
+Result - ../textures/*.png; build_uv5r.py projects them onto the detailed model.
 """
 import os
 import sys
@@ -21,7 +21,7 @@ BLACK = (14, 14, 16, 255)
 
 
 def key_icon(cv, x, z, s, fill):
-    """Значок ключа (блокировка клавиатуры) рядом с '#'."""
+    """Key icon (keyboard lock) next to '#'."""
     cv.ellipse(x - s * 0.35, z, s * 0.28, s * 0.28, outline=fill, width=s * 0.12)
     cv.line([(x - s * 0.08, z), (x + s * 0.55, z)], fill, s * 0.12)
     cv.line([(x + s * 0.40, z), (x + s * 0.40, z - s * 0.22)], fill, s * 0.1)
@@ -30,13 +30,13 @@ def key_icon(cv, x, z, s, fill):
 
 def front():
     cv = T.Canvas(*L.FRONT_RECT, ppm=L.PPM)
-    # кнопки лицевой панели
+    # front panel buttons
     for x, z, w, h, r, mat, txt in L.BUTTONS:
         cv.text(txt, x, z, h * (0.36 if len(txt) > 3 else 0.42), "din", WHITE)
-    # модель - на нижней плашке; марка - отдельной печатью на корпусе (brand())
+    # model name - on the bottom plate; the brand - a separate print on the body (brand())
     mx, mz, mw, mh, _ = L.MODEL_PLATE
     cv.text(L.MODEL, mx, mz, mh * 0.50, "din", WHITE, fit=mw - 0.0024)
-    # клавиши
+    # keys
     for row, z in zip(L.KEYS, L.KEY_ROWS):
         for (main, sub), x in zip(row, L.KEY_COLS):
             if main in ("^", "v"):
@@ -49,14 +49,14 @@ def front():
                     key_icon(cv, x + 0.0016, z, 0.0028, BLUE)
                 else:
                     cv.text(sub, x + 0.0015, z - 0.0001, 0.00085, "din", BLUE)
-    # истёртость: цифры 1..5 и PTT-зона трутся сильнее - общий слой проплешин
+    # wear: digits 1..5 and the PTT zone rub more - a shared layer of worn patches
     img = T.wear_print(cv.img, amount=0.22, seed=11, cell=140)
     img.save(os.path.join(OUT, "print_front.png"))
     print("wrote print_front.png", img.size)
 
 
 def brand():
-    """Марка прямо на корпусе, как у остальных моделей: у корпуса своей печати нет, поэтому отдельный слой."""
+    """Brand right on the body, like the other models: the body has no print of its own, hence a separate layer."""
     cv = T.Canvas(*L.FRONT_RECT, ppm=L.PPM)
     bx, bz, bw, bh, _ = L.BRAND_PLATE
     T.brand(cv, bx, bz, 0.0026, WHITE, T.BRAND_ACCENT)
@@ -66,7 +66,7 @@ def brand():
 
 
 def lcd():
-    """Выключенный ЖКИ: серо-зелёное поле, едва видные ТЁМНЫЕ погасшие сегменты, пылинки."""
+    """Powered-off LCD: a grey-green field, barely visible DARK dead segments, dust specks."""
     bg, cv = T.lcd_canvas(L.LCD_RECT, L.PPM, (104, 114, 100), (70, 78, 68), vignette=0.35, blur=40)
     x0, x1, z0, z1 = L.LCD_RECT
     ghost = (40, 46, 40, 34)
@@ -95,7 +95,7 @@ def left_side():
 
 
 def back():
-    """Наклейка аккумулятора: серебристая плёнка с тёмной печатью; верх уходит под клипсу."""
+    """Battery sticker: a silvery film with dark print; the top goes under the clip."""
     cv = T.Canvas(*L.BACK_RECT, ppm=L.PPM)
     x0, x1, z0, z1 = -0.0235, 0.0235, 0.0030, 0.0520
     cv.rect(x0, z0, x1, z1, fill=(150, 152, 150, 255), r=0.0015)
@@ -108,7 +108,7 @@ def back():
                               "OR DISPOSE OF IN FIRE. CHARGE ONLY WITH",
                               "SPECIFIED CHARGER. KEEP AWAY FROM WATER.")):
         cv.text(line, 0.0, 0.0330 - i * 0.0019, 0.00095, "narrow", ink)
-    # штрихкод и значки утилизации внизу - видны из-под клипсы
+    # barcode and recycling icons at the bottom - visible from under the clip
     import random
     rng = random.Random(7)
     x = -0.0190

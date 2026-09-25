@@ -1,6 +1,6 @@
-"""Печать рации на 10000 м: марка, надписи, клавиатура, ЖКИ, цифры на ручке, наклейка и табличка.
+"""Prints for the 10000 m radio: brand, captions, keypad, LCD, numbers on the knob, sticker and plate.
 
-    python make_prints_prc152.py          (системный Python с Pillow)
+    python make_prints_prc152.py          (system Python with Pillow)
 """
 import math
 import os
@@ -23,11 +23,11 @@ KEYINK = (238, 238, 232, 255)
 def front():
     cv = T.Canvas(*L.FRONT_RECT, ppm=L.PPM)
     bx, bz = L.BRAND_POS
-    # марка у армейской одним цветом, от левого края лица
+    # brand on the army radio in a single color, from the left edge of the face
     T.brand(cv, bx - 0.0110, bz, 0.0030, WHITE, anchor="l")
     wx, wz = L.WIDEBAND_POS
     cv.text("WIDEBAND NETWORKING", wx, wz, 0.0020, "din", WHITE, spacing=0.00012)
-    # клавиатура: крупная цифра/слово, мелкие буквы справа, подпись функции ниже
+    # keypad: large digit/word, small letters on the right, function label below
     for row, z in zip(L.KEYS, L.KEY_ROWS):
         for key, x in zip(row, L.KEY_COLS):
             if key is None:
@@ -63,7 +63,7 @@ def front():
 
 
 def knob():
-    """Цифры на боку ручки: видимая спереди половина цилиндра, шаг по углу, сжатие к краям."""
+    """Numbers on the side of the knob: the half of the cylinder visible from the front, stepped by angle, compressed toward the edges."""
     cv = T.Canvas(*L.KNOB_RECT, ppm=L.PPM)
     k = L.KNOB
     zt = L.H + k["h"] * 0.62
@@ -97,7 +97,7 @@ def lcd():
 
 
 def back():
-    """Табличка с номенклатурой на тыле (как на армейском имуществе) и наклейка аккумулятора."""
+    """Nomenclature plate on the back (like on army equipment) and the battery sticker."""
     cv = T.Canvas(*L.BACK_RECT, ppm=L.PPM)
     p = L.PLATE
     ink = (28, 30, 24, 255)
@@ -108,7 +108,7 @@ def back():
     for s, hh in lines:
         cv.text(s, 0.0, zc, hh, "din", ink)
         zc -= hh + 0.0024
-    # аккумулятор: чёрная полоса с белым текстом
+    # battery: a black stripe with white text
     b = L.BAT_LABEL
     cv.rect(b["x0"], b["z0"], b["x1"], b["z1"], fill=(26, 28, 24, 255), r=0.0012)
     wink = (205, 206, 198, 255)

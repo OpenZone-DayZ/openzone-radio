@@ -1,6 +1,6 @@
-"""Печать рации на 2000 м: клавиши, марка, ЖКИ, значки заглушки гарнитуры, PTT, наклейка тыла, лента.
+"""Print set for the 2000 m radio: keys, brand, LCD, headset jack cover icons, PTT, back sticker, strip.
 
-    python make_prints_uvs9.py          (системный Python с Pillow)
+    python make_prints_uvs9.py          (system Python with Pillow)
 """
 import os
 import random
@@ -68,7 +68,7 @@ def lcd():
 
 
 def right_side():
-    """Значки на заглушке гарнитуры: микрофон и наушники, тонкой светлой линией."""
+    """Icons on the headset jack cover: microphone and headphones, in a thin light line."""
     cv = T.Canvas(*L.RIGHT_RECT, ppm=L.PPM)
     yc, z0, z1, wy, _ = L.JACK
     col = (120, 118, 110, 220)

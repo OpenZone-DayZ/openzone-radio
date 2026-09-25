@@ -1,11 +1,10 @@
-"""Рация на 10000 м (по мотивам AN/PRC-152): детальная модель, лоды, запекание, текстуры, p3d.
+"""Radio, 10000 m range (inspired by the AN/PRC-152): detailed model, LODs, baking, textures, p3d.
 
     python make_prints_prc152.py
     blender -b -P build_prc152.py -- [--high-only] [--skip-bake] [--no-previews]
 
-Корпус - контур лица с «талией» у клавиатуры, выдавленный в глубину и скруглённый по кромкам;
-снизу отдельный крупный аккумулятор. Решётка динамика, углубления ЖКИ и клавиатуры - вырезы;
-клавиши и качелька PRE лежат на резиновом коврике.
+The body is the face outline with a "waist" at the keypad, extruded in depth and beveled along the
+edges; below it a separate, large battery. The speaker grille and the LCD and keypad recesses are cutouts; the keys and the PRE rocker sit on a rubber mat.
 """
 import math
 import os
@@ -94,7 +93,7 @@ def body(m):
                     slots.append(K.prism(K.rrect(g["slot_w"], g["slot_h"], g["slot_h"] * 0.45, xc, z, seg=3),
                                          L.YF + g["depth"], L.YF - 0.002, "Y"))
         cuts.append(K.merge(*slots))
-        # винты по углам тыла
+        # screws at the back corners
     m.add(bm, "body", name="Body", bevel_=(L.BEV, (4, 1, 0)), cuts=cuts or None, bevel_angle=45.0)
     if m.hi:
         for sx in (-1, 1):
@@ -144,7 +143,7 @@ def battery(m):
     prof = K.rrect(b["w"], b["yb"] - b["yf"], 0.0045, 0.0, (b["yf"] + b["yb"]) / 2, seg=m.s(6, 2, 1, 0))
     bm = K.prism(prof, 0.0, L.Z_BAT + 0.0015, "Z")
     cuts = None
-    if m.hi:     # паз защёлки по периметру и рёбра на лице
+    if m.hi:     # latch groove around the perimeter and ribs on the face
         cuts = [K.ring_prism(K.rrect(b["w"] + 0.004, b["yb"] - b["yf"] + 0.004, 0.006, 0.0, (b["yf"] + b["yb"]) / 2, 6),
                              K.rrect(b["w"] - 0.0010, b["yb"] - b["yf"] - 0.0010, 0.0040, 0.0, (b["yf"] + b["yb"]) / 2,
                                      6), b["latch_z"] - 0.0006, b["latch_z"] + 0.0006, "Z")]
@@ -153,7 +152,7 @@ def battery(m):
 
 def top(m):
     c, k, a = L.CONN, L.KNOB, L.ANT
-    # разъём гарнитуры
+    # headset connector
     if m.hi:
         m.add(K.prism(K.circle(c["x"], c["y"], c["r"] * 1.12, 6, math.radians(30)), L.H - 0.001, L.H + 0.0030, "Z"),
               "insert", name="ConnNut", bevel_=(0.0004, (2,)))
@@ -171,7 +170,7 @@ def top(m):
     elif m.upto(3):
         m.add(K.cyl(c["x"], c["y"], c["r"], L.H - 0.001, L.H + c["h"], m.s(0, 12, 8, 6), "Z"), "silver", name="Conn",
               bevel_=(0.0008, (0, 1, 0)), bevel_angle=60.0)
-    # ручка
+    # knob
     if m.hi:
         m.add(K.prism(K.knurl(k["x"], k["y"], k["r"] * 0.94, k["r"], k["teeth"], (0.0, 0.14, 0.5, 0.64)),
                       L.H - 0.001, L.H + k["h"] * 0.45, "Z"), "rubber", name="KnobRibs", bevel_=(0.0004, (2,)),
@@ -184,7 +183,7 @@ def top(m):
     else:
         m.add(K.cyl(k["x"], k["y"], k["r"], L.H - 0.001, L.H + k["h"], m.s(0, 16, 10, 8, 6), "Z"), "rubber",
               name="Knob", bevel_=(0.0012, (0, 1, 0)), bevel_angle=60.0)
-    # антенна: гайка TNC, пружинный участок, толстый штырь
+    # antenna: TNC nut, spring section, thick whip
     x, y = a["x"], a["y"]
     if m.upto(2):
         m.add(K.prism(K.circle(x, y, a["nut_r"], 6, math.radians(30)), L.H - 0.001, a["z_nut"], "Z"), "silver",
@@ -282,7 +281,7 @@ SPEC = dict(
     materials=materials,
     collision=collision,
     mass=0.60,
-    grip_shift=-0.07,           # сдвиг в хвате руки, м (+ к антенне), по просьбе пользователя 25.09
+    grip_shift=-0.07,           # shift in the hand grip, m (+ toward the antenna), at the owner's request 25.09
     body_top=L.H,
     previews=[
         ("front", 0, 4, 1.05, (0.0, 0.0, 0.215)),

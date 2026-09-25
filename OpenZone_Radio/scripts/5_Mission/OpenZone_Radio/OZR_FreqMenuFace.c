@@ -1,25 +1,29 @@
-// Окно частот «лицом рации».
+// The frequency window with the face of the radio.
 //
-// По K открывается одно окно на все рации - OZR_FreqMenu (OZR_FreqMenu.c) с общей клавиатурой.
-// Этот файл даёт тому же окну лицо той рации, что в руках: своя разметка
-// (gui/layouts/oz_face_<s>.layout, её пишет models/tools/make_hud_layouts.py), частота на экране
-// самой рации, клавиши на корпусе. Картинки лиц - gui/faces/oz_face_<s>.edds.
+// K opens one window for every radio: OZR_FreqMenu (OZR_FreqMenu.c) with a shared keypad.
+// This file gives that same window the face of the radio in hands: its own layout
+// (gui/layouts/oz_face_<s>.layout, written by models/tools/make_hud_layouts.py), the frequency
+// on the radio's own screen, the keys on the case. The face pictures are gui/faces/oz_face_<s>.edds.
 //
-// Отдельным файлом и modded class, а не правкой OZR_FreqMenu.c: окно без лица (класс без
-// ozrFaceLayout) остаётся ровно тем, что было, а всё про лица лежит в одном месте. Modded class
-// в Enforce видит и private-поля, и private-методы оригинала (вики DayZ:Enforce Script Syntax,
-// «Modded private members»). Файл обязан собираться ПОСЛЕ OZR_FreqMenu.c - внутри папки порядок
-// алфавитный, и имя OZR_FreqMenuFace.c идёт за ним; не переименовывать в то, что встанет раньше.
-// Набор, проверка полосы и запрос к серверу остаются у окна: клавиши разметки носят имена
-// кнопок его окна - Btn0..Btn9, BtnUp, BtnDown, BtnGo, BtnDot, BtnClose, DragBar. Своё здесь:
-//   - BtnBack: стереть цифру, а если стирать нечего - выйти (EXIT у Baofeng, CLR у PRC);
-//   - рация без цифр (ozrFaceMode = "step"): стрелка СРАЗУ переключает канал, окно остаётся;
-//   - автоточка: целая часть больше не может расти в пределах полосы - дальше точка;
-//   - два ряда экрана: у рации с цифрами сверху то, на чём стоит, снизу набранное; у рации
-//     без цифр крупно номер канала, мелко частота.
+// A separate file and a modded class rather than an edit of OZR_FreqMenu.c: a window without a
+// face (a class without ozrFaceLayout) stays exactly what it was, and everything about faces
+// lives in one place. In Enforce a modded class sees both the private fields and the private
+// methods of the original (DayZ wiki, Enforce Script Syntax, "Modded private members"). The file
+// MUST compile AFTER OZR_FreqMenu.c: inside a folder the order is alphabetical, and the name
+// OZR_FreqMenuFace.c sorts after it; do not rename it to anything that would sort earlier.
+// Typing, the band check and the request to the server stay the window's own: the layout's keys
+// carry the names of its buttons - Btn0..Btn9, BtnUp, BtnDown, BtnGo, BtnDot, BtnClose, DragBar.
+// What is added here:
+//   - BtnBack: erase a digit, and when there is nothing to erase - leave (EXIT on the Baofeng,
+//     CLR on the PRC);
+//   - a radio without digits (ozrFaceMode = "step"): an arrow switches the channel AT ONCE, the
+//     window stays open;
+//   - auto-dot: once the integer part can grow no further within the band, the dot follows;
+//   - two screen rows: on a radio with digits the current frequency on top and the typed one
+//     below; on a radio without digits the channel number large and the frequency small.
 //
-// Что за лицо у класса - в его конфиге: ozrFaceLayout, ozrFaceMode,
-// ozrFaceHint. Класс без ozrFaceLayout получает окно мода рации как было.
+// Which face a class has is in its config: ozrFaceLayout, ozrFaceMode, ozrFaceHint. A class
+// without ozrFaceLayout gets the plain window as it was.
 
 modded class OZR_FreqMenu
 {
@@ -29,9 +33,9 @@ modded class OZR_FreqMenu
     protected TextWidget m_OZR_Main;
     protected TextWidget m_OZR_Sub;
 
-    // Шаг, отправленный серверу и ещё не вернувшийся. Два быстрых нажатия иначе считали бы
-    // от одного и того же старого канала и ушли бы на один канал вместо двух. На экран это
-    // не попадает: экран, как и у мода рации, показывает только подтверждённое.
+    // A step sent to the server and not back yet. Two quick presses would otherwise both count
+    // from the same old channel and land on one channel instead of two. It never reaches the
+    // screen: the screen, like the plain window's, shows only what is confirmed.
     protected int m_OZR_PendingIdx = -1;
     protected int m_OZR_PendingAt;
 
@@ -57,7 +61,7 @@ modded class OZR_FreqMenu
         layoutRoot = GetGame().GetWorkspace().CreateWidgets(layout);
         if (!layoutRoot)
         {
-            // Лицо не собралось - окно мода рации лучше, чем никакого.
+            // The face did not build; the plain window beats none.
             OZR_Log.Error("face keypad: " + layout + " produced no widgets, falling back to the stock keypad");
             return super.Init();
         }
@@ -67,8 +71,8 @@ modded class OZR_FreqMenu
         m_Card  = layoutRoot;
         m_Title = TextWidget.Cast(layoutRoot.FindAnyWidget("TitleText"));
         m_Hint  = TextWidget.Cast(layoutRoot.FindAnyWidget("HintText"));
-        // Табло и полосы мода рации в лице нет: экран рисует OZR_Paint, и его строки никто
-        // не должен перезаписывать.
+        // The face has neither the plain window's display nor its band bar: the screen is drawn
+        // by Paint below, and nobody must overwrite its rows.
         m_Freq = null;
         m_Band = null;
         m_OZR_Main = TextWidget.Cast(layoutRoot.FindAnyWidget("LcdMain"));
@@ -80,8 +84,9 @@ modded class OZR_FreqMenu
         return layoutRoot;
     }
 
-    // Картинка в ImageWidget из скрипта, а не только из image0 разметки: так путь приходит из
-    // конфига класса, и промах виден в логе, а не пустым местом на экране.
+    // The picture goes into the ImageWidget from script, not only from the layout's image0: that
+    // way the path comes from the class config, and a miss shows in the log instead of as a
+    // blank on screen.
     protected void OZR_Load(string widget, string path)
     {
         ImageWidget w = ImageWidget.Cast(layoutRoot.FindAnyWidget(widget));
@@ -93,7 +98,7 @@ modded class OZR_FreqMenu
             OZR_Log.Warn("face keypad: " + widget + " image not loaded: " + path);
     }
 
-    // Рация в руках - та же проверка, что в Grab() мода рации, но Init идёт раньше OnShow.
+    // The radio in hands: the same check as Grab(), but Init runs before OnShow.
     protected static EntityAI OZR_InHands()
     {
         PlayerBase p = PlayerBase.Cast(GetGame().GetPlayer());
@@ -137,8 +142,8 @@ modded class OZR_FreqMenu
                 m_OZR_Sub.SetText(m_Typed);
         }
 
-        // Подсказка мода рации зовёт жать TUNE, а у этой рации своя клавиша ввода. Отказ
-        // («вне полосы») остаётся его.
+        // The plain window's hint says to press TUNE, but this radio has an enter key of its
+        // own. The refusal ("out of band") stays the window's.
         if (m_Hint)
         {
             if (m_HintKey == "#STR_OZR_KEYPAD_HINT" && m_OZR_Hint != "")
@@ -148,7 +153,8 @@ modded class OZR_FreqMenu
         }
     }
 
-    // Номер канала в своей полосе рации, с единицы. Пусто, пока полоса не известна.
+    // The channel number within the radio's own band, counted from one. Empty until the band
+    // is known.
     protected string OZR_Channel()
     {
         if (!m_Radio || !m_Profile)
@@ -197,12 +203,12 @@ modded class OZR_FreqMenu
             return true;
         }
 
-        // Автоточка: точка встаёт сама, только когда целая часть расти уже не может - с ещё
-        // одной цифрой она точно вышла бы за верх полосы этой рации. Полоса бывает любой
-        // (частоты двузначные, трёхзначные, четырёхзначные), поэтому не число цифр, а сама
-        // граница: при 136-156 после «136» (1360 > 156), при 80-1200 после «850», а «85» там
-        // неоднозначно (85.125 или 850) - точку ставит игрок, клавиша точки есть у всех раций
-        // с цифрами.
+        // Auto-dot: the dot appears by itself only once the integer part can grow no further -
+        // with one more digit it would surely pass the top of this radio's band. The band can be
+        // anything (two-, three- or four-digit frequencies), so the rule is the bound itself, not
+        // a digit count: with 136-156 after "136" (1360 > 156), with 80-1200 after "850", while
+        // "85" is ambiguous there (85.125 or 850) - the player puts the dot, and every radio with
+        // digits has a dot key.
         if (name.Length() == 4 && name.Substring(0, 3) == "Btn" && !m_Dialled && m_Profile)
         {
             if (m_Typed != "" && m_Typed.IndexOf(".") < 0 && OZR_IntComplete())
@@ -212,7 +218,7 @@ modded class OZR_FreqMenu
         return super.OnClick(w, x, y, button);
     }
 
-    // Целая часть набрана до конца: приписав к ней любую цифру, выйдем за верх полосы.
+    // The integer part is complete: appending any digit would pass the top of the band.
     protected bool OZR_IntComplete()
     {
         int top = m_Profile.MaxMHz;
@@ -220,8 +226,9 @@ modded class OZR_FreqMenu
         return typed * 10 > top;
     }
 
-    // Шаг на свой канал СРАЗУ, без TUNE: у рации без цифр набирать нечего, и подтверждение
-    // на каждый шаг было бы лишним нажатием. Окно остаётся открытым - шагать можно подряд.
+    // Step to the neighbouring channel AT ONCE, without TUNE: a radio without digits has nothing
+    // to type, and a confirmation per step would be one press too many. The window stays open,
+    // so steps can follow one another.
     protected void OZR_StepNow(int dir)
     {
         if (!m_Radio || !m_Profile)

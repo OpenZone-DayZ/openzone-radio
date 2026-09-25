@@ -1,10 +1,11 @@
-"""Рация на 500/750 м (по мотивам Midland LXT600): детальная модель, лоды, запекание, текстуры, p3d.
+"""Radio, 500/750 m range (inspired by the Midland LXT600): detailed model, LODs, baking, textures, p3d.
 
     python make_prints_lxt.py
     blender -b -P build_lxt.py -- [--high-only] [--skip-bake] [--no-previews]
 
-Числа - в layout_lxt.py. Геометрией до LOD2 остаются рамка ЖКИ, кнопки, ручка, антенна, PTT и
-клипса; прорези динамика - до LOD1; швы крышки, винты, микрофон - только в запекании.
+Numbers live in layout_lxt.py. Kept as geometry through LOD2: the LCD bezel, buttons, knob,
+antenna, PTT and clip; the speaker slots through LOD1; the battery door seams, screws and
+microphone only in baking.
 """
 import math
 import os
@@ -49,9 +50,9 @@ def materials():
 
 
 # =============================================================================
-# Детали
+# Parts
 # =============================================================================
-YP = L.YF + L.PANEL["depth"]        # дно углублённой лицевой панели
+YP = L.YF + L.PANEL["depth"]        # floor of the recessed front panel
 
 
 def shell(m):
@@ -82,7 +83,7 @@ def antenna(m):
     top = a["top"]
     if m.hi:
         prof = [(0.0, a["z0"] - 0.001), (a["r0"], a["z0"] - 0.001)]
-        for i in range(3):          # три кольцевых канавки у основания
+        for i in range(3):          # three ring grooves at the base
             z = a["z0"] + 0.0030 + i * 0.0022
             prof += [(a["r0"], z - 0.0005), (a["r0"] - 0.0004, z), (a["r0"], z + 0.0005)]
         n = 12
@@ -130,8 +131,8 @@ def bezel(m):
 
 
 def button_outline(x, z, slant, row, seg):
-    """Кнопка: скруглённый четырёхугольник; у крайних скошен внешний угол (верхний в первом ряду,
-    нижний во втором), как на референсе - кнопки следуют овалу лица."""
+    """Button: a rounded quadrilateral; the outer corner is chamfered on the end buttons (top one
+    in the first row, bottom one in the second), as in the reference - the buttons follow the oval of the face."""
     w, h = L.BTN_W, L.BTN_H
     cut = 0.0016
     pts = [(x + w / 2, z - h / 2), (x + w / 2, z + h / 2), (x - w / 2, z + h / 2), (x - w / 2, z - h / 2)]
@@ -175,15 +176,15 @@ def back_door(m):
         bm = K.prism(K.rrect(d["w"], d["z1"] - d["z0"], d["r"], 0.0, (d["z0"] + d["z1"]) / 2, seg=m.s(5, 2)),
                      L.YB - 0.001, L.YB + 0.0005, "Y")
         cuts = None
-        if m.hi:     # защёлка: насечка внизу крышки
+        if m.hi:     # latch: ridges at the bottom of the door
             cuts = [K.merge(*[K.prism(K.rect(0.012, 0.0005, 0.0, d["z0"] + 0.004 + i * 0.0011), L.YB + 0.0002,
                                       L.YB + 0.002, "Y") for i in range(4)])]
         m.add(bm, "body", name="BatteryDoor", bevel_=(0.0005, (3, 1)), cuts=cuts, bevel_angle=50.0)
 
 
 def clip_offset(z):
-    """Отход пластины клипсы от корпуса: чистый сдвиг, пластина остаётся ПЛОСКОЙ. Изгиб делал
-    неплоскую n-угольную крышку, и её триангуляция складкой давала тёмный «ромб» посередине."""
+    """Offset of the clip plate from the body: a pure shift, the plate stays FLAT. Bending it made
+    a non-flat n-gon plate, and its fold triangulation gave a dark "diamond" in the middle."""
     return 0.0030 * (L.CLIP_TOP - z) / (L.CLIP_TOP - L.CLIP_BOT)
 
 
@@ -245,7 +246,7 @@ SPEC = dict(
     materials=materials,
     collision=collision,
     mass=0.22,
-    grip_shift=0.01,           # сдвиг в хвате руки, м (+ к антенне), по просьбе пользователя 25.09
+    grip_shift=0.01,           # shift in the hand grip, m (+ toward the antenna), at the owner's request 25.09
     body_top=L.H,
     previews=[
         ("front", 0, 4, 0.72, (0.0, 0.0, 0.098)),

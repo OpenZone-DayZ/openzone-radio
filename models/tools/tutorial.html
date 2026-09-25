@@ -1,10 +1,10 @@
 <!doctype html>
-<!-- Туториал раций для игроков. Шаблон: данные (лица, клавиши, линейку) подставляет
-     tools/render_tutorial.py вместо DATA и снимает страницу headless Chrome. -->
-<html lang="ru">
+<!-- Player-facing radio tutorial. Template: tools/render_tutorial.py fills in the data
+     (faces, keys, the lineup) in place of DATA and shoots the page with headless Chrome. -->
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Рации OpenZone</title>
+<title>OpenZone Radios</title>
 <style>
 :root {
   --bg: #17191d; --panel: #20242a; --line: #30353d; --ink: #eceae4; --mute: #a3a7ae; --dim: #767b83;
@@ -18,7 +18,7 @@ body { margin: 0; width: 1920px; background: var(--bg); color: var(--ink);
 .wrap { padding: 64px 72px 40px; }
 b { color: #fff; font-weight: 600; }
 
-/* плашка с рукописной подписью - оформление заголовков страницы */
+/* the tape-with-handwriting chip - decoration for the page headings */
 .tape { display: inline-block; background: var(--tape); color: var(--tape-ink); padding: 4px 22px 6px;
   font-family: "Segoe Print", cursive; font-weight: 700; font-size: 25px; transform: rotate(-2deg);
   box-shadow: 0 2px 6px rgba(0,0,0,.35);
@@ -37,7 +37,7 @@ h2 { font-weight: 700; font-stretch: condensed; font-size: 58px; line-height: 1;
 .chip { display: inline-block; padding: 0 .4em; border: 2.5px solid; border-radius: .3em; font-weight: 600;
   line-height: 1.25; margin: 0 .06em; white-space: nowrap; }
 
-/* ---- шапка: заголовок и четыре шага слева, линейка справа ---- */
+/* ---- hero: heading and four steps on the left, lineup on the right ---- */
 .hero { display: flex; gap: 32px; align-items: center; }
 .hero-l { width: 780px; flex: none; }
 .hero-r { flex: 1; position: relative; }
@@ -57,7 +57,7 @@ h2 { font-weight: 700; font-stretch: condensed; font-size: 58px; line-height: 1;
 .cap .r { font-family: "Segoe Print", cursive; font-weight: 700; color: var(--tape); font-size: 22px; }
 .note-r { color: var(--mute); font-size: 21px; text-align: right; margin-top: 6px; }
 
-/* ---- разделы ---- */
+/* ---- sections ---- */
 section { margin-top: 64px; }
 .sh { display: flex; align-items: center; gap: 22px; margin-bottom: 14px; }
 .sub { color: var(--mute); font-size: 24px; margin: 0 0 26px; max-width: 1500px; }
@@ -123,25 +123,25 @@ ol.chain li small { color: var(--dim); font-size: 19px; }
 <body>
 <div class="wrap">
 
-<!-- ======================= шапка ======================= -->
+<!-- ======================= hero ======================= -->
 <div class="hero">
   <div class="hero-l">
-    <span class="tape">инструкция</span>
-    <h1>Как пользоваться<br>рацией</h1>
-    <p class="lead">Шесть моделей на одной сетке частот. Разница только в дальности:
-      она написана в описании рации.</p>
+    <span class="tape">guide</span>
+    <h1>How to use<br>the radio</h1>
+    <p class="lead">Six models on one frequency grid. The only difference is range:
+      it is in the radio's description.</p>
     <div class="steps">
       <div class="step"><div class="num">1</div>
-        <div><h3>Батарейка</h3><p>Вставь батарейку <b>9V</b> в рацию: перетащи её на рацию в инвентаре.</p></div>
+        <div><h3>Battery</h3><p>Put a <b>9V</b> battery in the radio: drag it onto the radio in the inventory.</p></div>
         <div class="ico"><svg width="120" height="74" viewBox="0 0 120 74"><rect x="4" y="16" width="112" height="54" rx="7" fill="#2d3238" stroke="#8c939c" stroke-width="3"/><rect x="4" y="16" width="36" height="54" rx="7" fill="#c9a23c"/><rect x="22" y="4" width="18" height="12" rx="2" fill="#aeb4bb"/><path d="M76 4h22v12H76z" fill="#aeb4bb"/><text x="78" y="53" fill="#eceae4" font-family="Bahnschrift" font-weight="700" font-size="24" text-anchor="middle">9V</text></svg></div></div>
       <div class="step"><div class="num">2</div>
-        <div><h3>Включи</h3><p>Возьми рацию в руки и нажми <b>ЛКМ</b>: действие «Включить».</p></div>
+        <div><h3>Turn on</h3><p>Take the radio in your hands and press <b>LMB</b>: the “Turn on” action.</p></div>
         <div class="ico"><svg width="62" height="92" viewBox="0 0 62 92"><rect x="3" y="3" width="56" height="86" rx="28" fill="#2d3238" stroke="#8c939c" stroke-width="3"/><path d="M31 3v34M3 37h56" stroke="#8c939c" stroke-width="3"/><path d="M5 35V31A26 26 0 0 1 29.5 5.1V35z" fill="#f2b441"/></svg></div></div>
       <div class="step"><div class="num">3</div>
-        <div><h3>Частота</h3><p>Рация в руках и включена: <b>K</b> открывает окно частоты с лицом твоей рации.</p></div>
+        <div><h3>Frequency</h3><p>With the radio in your hands and on, <b>K</b> opens the frequency window with your radio's face.</p></div>
         <div class="ico"><span class="key big">K</span></div></div>
       <div class="step"><div class="num">4</div>
-        <div><h3>Говори</h3><p>Держи <b>Caps Lock</b> и говори. Дважды быстро — замок, рация говорит без рук.</p></div>
+        <div><h3>Talk</h3><p>Hold <b>Caps Lock</b> and speak. Twice quickly — a lock: the radio transmits hands-free.</p></div>
         <div class="ico"><span class="key big" style="font-size:27px">Caps Lock</span></div></div>
     </div>
   </div>
@@ -150,102 +150,102 @@ ol.chain li small { color: var(--dim); font-size: 19px; }
   </div>
 </div>
 
-<!-- ======================= частота ======================= -->
+<!-- ======================= frequency ======================= -->
 <section>
-  <div class="sh"><span class="tape">клавиша K</span><h2>Настройка частоты</h2></div>
-  <p class="sub">Окно — это лицо рации, что у тебя в руках. Кликай мышью по её кнопкам. Клавиатура остаётся игре:
-    с открытым окном можно бежать. Закрыть окно: <span class="key">K</span>, <span class="key">Esc</span>
-    или крестик в углу. Окно можно перетащить за корпус, место запоминается.</p>
+  <div class="sh"><span class="tape">key K</span><h2>Tuning the frequency</h2></div>
+  <p class="sub">The window is the face of the radio in your hands. Click its buttons with the mouse. The keyboard stays with the game:
+    you can run with the window open. Close it with <span class="key">K</span>, <span class="key">Esc</span>
+    or the cross in the corner. Drag the window by the radio body; the place is remembered.</p>
   <div class="faces" id="faces"></div>
   <div class="legend" id="legend"></div>
   <div class="facts">
-    <div class="card"><h4>Экран</h4><p>У рации с цифрами сверху частота, на которой она стоит, снизу то, что
-      набираешь. У Шептуна и Базара крупно номер канала, мелко его частота.</p></div>
-    <div class="card"><h4>Точка ставится сама</h4><p>Набери <span class="key">1</span><span class="key">4</span><span class="key">5</span><span class="key">5</span>,
-      и на экране будет <b>145.5</b>. Подтверди, и рация встанет на 145.500.</p></div>
-    <div class="card"><h4>Мимо сетки</h4><p>Частоты идут через 0.05 МГц. Если частота вне диапазона, окно
-      напишет «Поза діапазоном цієї рації». Набери заново.</p></div>
+    <div class="card"><h4>Screen</h4><p>On a radio with digits, the top line is the frequency it is on, the bottom line is what
+      you are typing. Sheptun and Bazar show the channel number big and its frequency small.</p></div>
+    <div class="card"><h4>The dot is inserted for you</h4><p>Type <span class="key">1</span><span class="key">4</span><span class="key">5</span><span class="key">5</span>,
+      and the screen shows <b>145.5</b>. Confirm, and the radio tunes to 145.500.</p></div>
+    <div class="card"><h4>Off the grid</h4><p>Frequencies go in steps of 0.05 MHz. If the frequency is out of the band, the window
+      says “Outside this set's band”. Type it again.</p></div>
   </div>
 </section>
 
-<!-- ======================= эфир ======================= -->
+<!-- ======================= on the air ======================= -->
 <section>
-  <div class="sh"><span class="tape">Caps Lock</span><h2>Эфир</h2></div>
+  <div class="sh"><span class="tape">Caps Lock</span><h2>On the air</h2></div>
   <div class="air">
-    <div class="card"><h4>Говорить</h4>
-      <p>Держи <span class="key">Caps Lock</span>. Тебя слышно и вслух, и в рацию. Пока идёт передача, справа
-        на экране горит значок:</p>
+    <div class="card"><h4>Talking</h4>
+      <p>Hold <span class="key">Caps Lock</span>. You are heard both aloud and in the radio. While you transmit, an icon
+        lights up on the right of the screen:</p>
       <div class="huds">
-        <div><div class="hud"><svg viewBox="0 0 32 32"><path d="M9 2v8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><rect x="6" y="9" width="18" height="21" rx="3" fill="none" stroke="#fff" stroke-width="2.4"/><rect x="10" y="13" width="10" height="6" rx="1" fill="#fff"/><path d="M10 23h10M10 26h10" stroke="#fff" stroke-width="2"/></svg>В ЕФІРІ</div><small>держишь клавишу</small></div>
-        <div><div class="hud"><svg viewBox="0 0 32 32"><path d="M9 2v8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><rect x="6" y="9" width="18" height="21" rx="3" fill="none" stroke="#fff" stroke-width="2.4"/><rect x="10" y="13" width="10" height="6" rx="1" fill="#fff"/><path d="M10 23h10M10 26h10" stroke="#fff" stroke-width="2"/></svg>ЗАБЛОКОВАНО</div><small>замок</small></div>
+        <div><div class="hud"><svg viewBox="0 0 32 32"><path d="M9 2v8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><rect x="6" y="9" width="18" height="21" rx="3" fill="none" stroke="#fff" stroke-width="2.4"/><rect x="10" y="13" width="10" height="6" rx="1" fill="#fff"/><path d="M10 23h10M10 26h10" stroke="#fff" stroke-width="2"/></svg>ON AIR</div><small>key held</small></div>
+        <div><div class="hud"><svg viewBox="0 0 32 32"><path d="M9 2v8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><rect x="6" y="9" width="18" height="21" rx="3" fill="none" stroke="#fff" stroke-width="2.4"/><rect x="10" y="13" width="10" height="6" rx="1" fill="#fff"/><path d="M10 23h10M10 26h10" stroke="#fff" stroke-width="2"/></svg>LOCKED</div><small>the lock</small></div>
       </div>
-      <p><b>Замок:</b> нажми Caps Lock дважды быстро, и рация продолжит передавать без рук. Любое следующее
-        нажатие снимает замок. Не забывай его: открытый эфир выдаёт всю группу.</p></div>
-    <div class="card"><h4>Какая рация говорит</h4>
-      <p>Передаёт всегда одна рация, первая по списку:</p>
+      <p><b>The lock:</b> press Caps Lock twice quickly and the radio keeps transmitting hands-free. Any next
+        press releases the lock. Do not forget it: an open channel gives the whole group away.</p></div>
+    <div class="card"><h4>Which radio talks</h4>
+      <p>Only one radio transmits, the first on the list:</p>
       <ol class="chain">
-        <li>в руках</li>
-        <li>на лямке рюкзака</li>
-        <li>в рюкзаке или кармане <small>(если сервер разрешил)</small></li>
+        <li>in your hands</li>
+        <li>on the backpack strap</li>
+        <li>in the backpack or a pocket <small>(if the server allows it)</small></li>
       </ol>
-      <p>Если две рации в одном месте, говорит та, что ты держал в руках последней.</p></div>
-    <div class="card"><h4>Кто тебя слышит</h4>
-      <p>Все включённые рации на той же частоте, до которых достаёт связь.</p>
-      <p><b>Принимает любая включённая рация</b>, даже на дне рюкзака. Выключенная не слышит ничего.</p>
-      <p>Дальность написана в описании рации: от <b>250 м</b> у Шептуна до <b>10 км</b> у Кристала.</p></div>
+      <p>If two radios are in the same place, the one you held last talks.</p></div>
+    <div class="card"><h4>Who hears you</h4>
+      <p>Every radio that is on, tuned to the same frequency and within reach.</p>
+      <p><b>Any radio that is on receives</b>, even at the bottom of a backpack. A radio that is off hears nothing.</p>
+      <p>The range is in the radio's description: from <b>250 m</b> on the Sheptun to <b>10 km</b> on the Crystal.</p></div>
   </div>
 </section>
 
-<!-- ======================= сетка ======================= -->
+<!-- ======================= grid ======================= -->
 <section>
-  <div class="sh"><span class="tape">136–156 МГц</span><h2>Частоты и каналы</h2></div>
-  <p class="sub">У всех раций одна полоса: <b>136.000–155.950 МГц</b> с шагом <b>0.05</b>, это <b>400 каналов</b>.
-    Любые две рации могут встать на одну частоту. У Шептуна и Базара на экране номер канала, так что договаривайтесь по этой шкале:</p>
+  <div class="sh"><span class="tape">136–156 MHz</span><h2>Frequencies and channels</h2></div>
+  <p class="sub">All radios share one band: <b>136.000–155.950 MHz</b> in steps of <b>0.05</b>, that is <b>400 channels</b>.
+    Any two radios can tune to the same frequency. Sheptun and Bazar show the channel number, so agree on this scale:</p>
   <div class="band"><div class="bar" id="bar"></div>
-    <div class="ends"><span><b>136.000</b> · канал 1</span>
-      <span>канал N = 136.000 + 0.05 × (N − 1) · каждые 20 каналов = 1 МГц</span>
-      <span>канал 400 · <b>155.950</b></span></div></div>
+    <div class="ends"><span><b>136.000</b> · channel 1</span>
+      <span>channel N = 136.000 + 0.05 × (N − 1) · every 20 channels = 1 MHz</span>
+      <span>channel 400 · <b>155.950</b></span></div></div>
 </section>
 
-<!-- ======================= полезно ======================= -->
+<!-- ======================= good to know ======================= -->
 <section>
-  <div class="sh"><span class="tape">полезно знать</span></div>
+  <div class="sh"><span class="tape">good to know</span></div>
   <div class="tips">
-    <div class="card"><h4>Своя кнопка для рации</h4><p>Настройки → Управление → OpenZone → «Рація: натиснути й
-      говорити». После перезахода новая клавиша включает и голос, и эфир, а Caps Lock остаётся только голосом рядом.</p></div>
-    <div class="card"><h4>Брошенная рация</h4><p>Бросил рацию, пока держал Caps Lock, и она замолчит. Бросил её
-      на замке, и она продолжит вещать. Смерть снимает замок сама.</p></div>
-    <div class="card"><h4>Батарейка и вход</h4><p>Села батарейка — рация молчит и не слышит, замок снимается.
-      Рация, которая была в руках, после перезахода выключена: включи её снова.</p></div>
+    <div class="card"><h4>Your own radio key</h4><p>Settings → Controls → OpenZone → “Radio: push to talk”.
+      After you rejoin, the new key drives both your voice and the air, while Caps Lock stays voice-only nearby.</p></div>
+    <div class="card"><h4>A dropped radio</h4><p>Drop the radio while holding Caps Lock and it goes silent. Drop it
+      on the lock and it keeps transmitting. Death releases the lock by itself.</p></div>
+    <div class="card"><h4>Battery and rejoining</h4><p>A dead battery means the radio is silent and deaf, and the lock is released.
+      A radio that was in your hands is off after you rejoin: turn it on again.</p></div>
   </div>
 </section>
 
-<div class="foot"><span>OpenZone Radio · Zone Protocol  —  модели раций: OpenZone Radio Models · CC BY-NC-SA 4.0</span>
-  <span>Полоса и разрешения — по умолчанию; админ сервера может настроить иначе.</span></div>
+<div class="foot"><span>OpenZone Radio · Zone Protocol  —  radio models: OpenZone Radio Models · CC BY-NC-SA 4.0</span>
+  <span>Band and permissions are the defaults; the server admin may set them differently.</span></div>
 </div>
 
 <script>
 const DATA = /*DATA*/null;
 const C = DATA.colors;
 const NAMES = {
-  pmr_t388: ["Шептун", "250 м"], lxt: ["Базар", "500 м"], uv5r: ["Балаболка", "1 км"],
-  uvs9: ["Скриня", "2 км"], xts: ["Терран", "5 км"], prc152: ["Кристал", "10 км"] };
+  pmr_t388: ["Шептун", "250 m"], lxt: ["Базар", "500 m"], uv5r: ["Балаболка", "1 km"],
+  uvs9: ["Скриня", "2 km"], xts: ["Терран", "5 km"], prc152: ["Кристал", "10 km"] };
 const chip = (role, t) => `<span class="chip" style="color:${C[role]};border-color:${C[role]}">${t}</span>`;
 const HOW = {
-  pmr_t388: [`${chip("step", "▼")} ${chip("step", "▲")} соседний канал`, `сразу; ${chip("close", "●")} красная — выйти`],
-  lxt: [`${chip("step", "▼")} ${chip("step", "▲")} соседний канал`, `сразу, без подтверждения`],
-  uv5r: [`${chip("digit", "1 4 5 5")} → ${chip("go", "MENU")}`, `${chip("back", "EXIT")} стереть / выйти`,
-         `${chip("step", "▲▼")} соседний → ${chip("go", "MENU")}`],
-  uvs9: [`${chip("digit", "1 4 5 5")} → ${chip("go", "MENU")}`, `${chip("back", "EXIT")} стереть / выйти`,
-         `${chip("step", "▲▼")} соседний → ${chip("go", "MENU")}`],
-  xts: [`${chip("digit", "1 4 5 5")} → ${chip("go", "↵")} справа`, `${chip("back", "#")} стереть / выйти`,
-        `${chip("step", "джойстик ▲▼")} соседний`, `${chip("close", "слева")} выйти`],
-  prc152: [`${chip("digit", "1 4 5 5")} → ${chip("go", "ENT")}`, `${chip("back", "CLR")} ${chip("back", "◄")} стереть / выйти`,
-           `${chip("step", "PRE + −")} соседний`] };
-const GROUPS = [["Без цифр: стрелки сразу меняют канал", ["pmr_t388", "lxt"]],
-                ["С цифрами: набери частоту и подтверди", ["uv5r", "uvs9", "xts", "prc152"]]];
+  pmr_t388: [`${chip("step", "▼")} ${chip("step", "▲")} neighbouring channel`, `at once; ${chip("close", "●")} red — exit`],
+  lxt: [`${chip("step", "▼")} ${chip("step", "▲")} neighbouring channel`, `at once, no confirmation`],
+  uv5r: [`${chip("digit", "1 4 5 5")} → ${chip("go", "MENU")}`, `${chip("back", "EXIT")} erase / exit`,
+         `${chip("step", "▲▼")} neighbour → ${chip("go", "MENU")}`],
+  uvs9: [`${chip("digit", "1 4 5 5")} → ${chip("go", "MENU")}`, `${chip("back", "EXIT")} erase / exit`,
+         `${chip("step", "▲▼")} neighbour → ${chip("go", "MENU")}`],
+  xts: [`${chip("digit", "1 4 5 5")} → ${chip("go", "↵")} on the right`, `${chip("back", "#")} erase / exit`,
+        `${chip("step", "joystick ▲▼")} neighbour`, `${chip("close", "left")} exit`],
+  prc152: [`${chip("digit", "1 4 5 5")} → ${chip("go", "ENT")}`, `${chip("back", "CLR")} ${chip("back", "◄")} erase / exit`,
+           `${chip("step", "PRE + −")} neighbour`] };
+const GROUPS = [["No digits: the arrows change the channel at once", ["pmr_t388", "lxt"]],
+                ["With digits: type the frequency and confirm", ["uv5r", "uvs9", "xts", "prc152"]]];
 
-// ---- лица: один масштаб на все, как окна в игре (они примерно одной высоты)
+// ---- faces: one scale for all, like the windows in the game (they are about the same height)
 const faces = document.getElementById("faces");
 const avail = 1776, gapCol = 26, gapGroup = 60, colMin = 262;
 const all = Object.values(DATA.faces);
@@ -253,7 +253,7 @@ let maxH = 0;
 let s = 600 / Math.max(...all.map(f => f.h));
 const widthAt = k => GROUPS.reduce((a, [, rs]) => a + rs.reduce((b, r) => b + Math.max(DATA.faces[r].w * k, colMin), 0)
   + gapCol * (rs.length - 1), 0) + gapGroup;
-for (let i = 0; i < 60 && widthAt(s) > avail; i++) s *= 0.98;   // колонки не уже colMin: без предела цикл вечный
+for (let i = 0; i < 60 && widthAt(s) > avail; i++) s *= 0.98;   // columns no narrower than colMin: without the cap the loop never ends
 maxH = Math.max(...all.map(f => f.h)) * s;
 for (const [label, rs] of GROUPS) {
   const g = document.createElement("div"); g.className = "group";
@@ -274,12 +274,12 @@ for (const [label, rs] of GROUPS) {
   }
   faces.appendChild(g);
 }
-const LEG = [["digit", "цифры — набор частоты"], ["go", "подтвердить частоту"], ["back", "стереть цифру, а если нечего — выйти"],
-  ["step", "шаг на соседний канал"], ["dot", "точка (после трёх цифр ставится сама)"], ["close", "закрыть окно"]];
+const LEG = [["digit", "digits — type a frequency"], ["go", "confirm the frequency"], ["back", "erase a digit, or exit if there is nothing to erase"],
+  ["step", "step to the neighbouring channel"], ["dot", "dot (inserted automatically after three digits)"], ["close", "close the window"]];
 document.getElementById("legend").innerHTML = LEG.map(([r, t]) =>
   `<div><span class="sw" style="color:${C[r]};border-color:${C[r]}"></span>${t}</div>`).join("");
 
-// ---- линейка: кадр по крайним рациям, подписи под низом каждой
+// ---- lineup: frame set by the outermost radios, captions under the bottom of each
 const L = DATA.lineup, R = L.radios, box = document.getElementById("lineup");
 const x0 = Math.min(...Object.values(R).map(v => v.left[0])) - 60;
 const x1 = Math.max(...Object.values(R).map(v => v.right[0])) + 40;
@@ -294,12 +294,12 @@ for (const [r, v] of Object.entries(R)) {
   box.appendChild(c);
 }
 
-// ---- полоса частот: деление на каждый МГц, метки на примерах
+// ---- frequency bar: a tick per MHz, pins on the examples
 const bar = document.getElementById("bar"), lo = 136, hi = 155.95;
 for (let m = 137; m < 156; m++) bar.insertAdjacentHTML("beforeend", `<div class="tick" style="left:${(m - lo) / (hi - lo) * 100}%"></div>`);
 for (const n of [21, 101, 191, 301]) {
   const f = lo + 0.05 * (n - 1);
-  bar.insertAdjacentHTML("beforeend", `<div class="pin" style="left:${(f - lo) / (hi - lo) * 100}%">канал ${n}<b>${f.toFixed(3)}</b></div>`);
+  bar.insertAdjacentHTML("beforeend", `<div class="pin" style="left:${(f - lo) / (hi - lo) * 100}%">channel ${n}<b>${f.toFixed(3)}</b></div>`);
 }
 
 document.body.setAttribute("data-h", Math.ceil(document.documentElement.scrollHeight));

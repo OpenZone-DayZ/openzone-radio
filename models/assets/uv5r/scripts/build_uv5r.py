@@ -1,12 +1,12 @@
-"""Рация на 1000 м (по мотивам Baofeng UV-5R): детальная модель, лоды, запекание, текстуры, p3d.
+"""Radio with 1000 m range (modeled after the Baofeng UV-5R): detailed model, LODs, baking, textures, p3d.
 
-    python make_prints_uv5r.py                                   (надписи, ЖКИ, ленты)
+    python make_prints_uv5r.py                                   (labels, LCD, strips)
     blender -b -P build_uv5r.py -- [--high-only] [--skip-bake] [--passes albedo,rough] [--no-previews]
 
-Числа - в layout_uv5r.py (их же читает печать). Каждая деталь строится функцией уровня m.q:
-0 - детальная модель (только источник запекания), 1..4 - игровые лоды. Что остаётся на лоде
-геометрией, а что уходит в карту нормалей, решено по заметности: клавиши, кнопки, ручка, антенна,
-PTT и клипса - геометрия до LOD2; прорези решётки, винты, рёбра, плашки - только в запекании.
+Numbers live in layout_uv5r.py (the print script reads the same ones). Each part is built by an m.q-level function:
+0 - detailed model (bake source only), 1..4 - in-game LODs. Whether something stays as geometry on the LOD
+or goes into the normal map is decided by visibility: keys, buttons, the knob, the antenna,
+the PTT and the clip - geometry down to LOD2; grille slots, screws, ribs, plates - baked only.
 """
 import math
 import os
@@ -61,7 +61,7 @@ def materials():
 
 
 # =============================================================================
-# Детали
+# Parts
 # =============================================================================
 def grille_slots():
     g = L.GRILLE
@@ -90,7 +90,7 @@ def shell(m):
         cuts.append(grille_slots())
         t = L.TORCH
         cuts.append(K.cyl(t["x"], t["y"], t["r"] + 0.0006, L.H - 0.0012, L.H + 0.002, 24, "Z"))
-        # шов между лицевой оболочкой и шасси: неглубокая канавка по бокам и верху
+        # seam between the front shell and the chassis: a shallow groove on the sides and top
         cuts.append(K.ring_prism(K.rect(L.W + 0.004, L.H * 2 + 0.01, 0.0, 0.0), K.rect(L.W - 0.0008, L.H * 2 - 0.0008 + 0.0,
                                                                                          0.0, 0.0), -0.0035, -0.0029,
                                  "Y"))
@@ -107,7 +107,7 @@ def lcd_block(m):
         cuts.append(K.prism(K.rrect(w["w"], w["h"], w["r"], w["cx"], w["cz"], seg=m.s(4, 1)), yf - 0.001,
                             yf + w["depth"], "Y"))
     m.add(bm, "body", name="LcdBlock", bevel_=(0.0008, (3, 1, 0)), cuts=cuts, bevel_angle=50.0)
-    # сам индикатор: пластина на дне окна (на дальних лодах - прямо на лице блока)
+    # the indicator itself: a plate at the bottom of the window (on far LODs - right on the face of the block)
     y_lcd = yf + w["depth"] - 0.0001 if m.upto(1) else yf - 0.0001
     lcd = K.prism(K.rrect(w["w"] - 0.0004, w["h"] - 0.0004, w["r"], w["cx"], w["cz"], seg=m.s(4, 1, 0)),
                   y_lcd + 0.0003, y_lcd, "Y")
@@ -147,7 +147,7 @@ def knob(m):
               bevel_=(0.0003, (2,)))
         bm = K.prism(K.knurl(k["x"], k["y"], k["r"] * 0.93, k["r"], k["teeth"], (0.0, 0.2, 0.5, 0.7)), z0, z1, "Z")
         m.add(bm, "rubber", name="Knob", bevel_=(0.00025, (2,)), bevel_angle=60.0)
-        # лунка-указатель на торце
+        # pointer dimple on the end face
         return
     n = m.s(0, 16, 10, 8, 6)
     m.add(K.cyl(k["x"], k["y"], k["r"] * 0.97, L.H - 0.001, z1, n, "Z"), "rubber", name="Knob",
@@ -164,7 +164,7 @@ def antenna(m):
     zb, zt = a["z_boot"], a["top"]
     if m.hi:
         prof = [(0.0, a["z_nut"] - 0.0005), (a["boot_r"] * 0.92, a["z_nut"] - 0.0005), (a["boot_r"], a["z_nut"] + 0.0008)]
-        # три кольца-рифления на основании
+        # three knurled rings at the base
         for i in range(3):
             z = a["z_nut"] + 0.0025 + i * 0.0028
             prof += [(a["boot_r"], z - 0.0006), (a["boot_r"] - 0.0005, z), (a["boot_r"], z + 0.0006)]
@@ -233,7 +233,7 @@ def battery(m):
     bm = K.prism(prof, 0.0, L.BAT_TOP, "Z")
     m.add(bm, "battery", name="Battery", bevel_=(0.0012, (3, 1, 0)), bevel_angle=50.0)
     if m.hi:
-        # защёлка сверху: рифлёная клавиша
+        # latch on top: a knurled key
         lat = K.prism(K.rrect(0.016, 0.006, 0.0015, 0.0, L.BAT_TOP - 0.003, seg=3), L.BAT_Y1 - 0.0005,
                       L.BAT_Y1 + 0.0011, "Y")
         ribs = [K.prism(K.rect(0.018, 0.0005, 0.0, L.BAT_TOP - 0.0045 + i * 0.001), L.BAT_Y1 + 0.0007,
@@ -242,8 +242,8 @@ def battery(m):
 
 
 def clip_offset(z):
-    """Отход пластины клипсы от корпуса: чистый сдвиг, пластина остаётся ПЛОСКОЙ. Изгиб делал
-    неплоскую n-угольную крышку, и её триангуляция складкой давала тёмный «ромб» посередине."""
+    """Offset of the clip plate from the body: a pure shift, the plate stays FLAT. Bending produced
+    a non-flat n-gon cap, and its fold triangulation gave a dark "diamond" in the middle."""
     return 0.0035 * (L.CLIP_TOP - z) / (L.CLIP_TOP - L.CLIP_BOT)
 
 
@@ -254,7 +254,7 @@ def belt_clip(m):
         m.add(mount, "clip", name="ClipMount", bevel_=(0.0006, (3, 1, 0)), bevel_angle=50.0)
     if not m.upto(3):
         return
-    # пластина: плоский контур со скруглёнными углами, прогнутый по высоте
+    # plate: a flat outline with rounded corners, bowed along its height
     pts = K.rrect(L.CLIP_W, L.CLIP_TOP - L.CLIP_BOT, (0.004, 0.002, 0.002, 0.004), 0.0,
                   (L.CLIP_TOP + L.CLIP_BOT) / 2, seg=m.s(5, 2, 1, 0))
     pts = K.densify(pts, m.s(0.003, 0.008, 0.02, 0.05))
@@ -288,7 +288,7 @@ def build(m):
 
 
 # =============================================================================
-# Коллизия: корпус одной оболочкой (с ручкой и клипсой), антенна - второй, как у ванили
+# Collision: body as one shell (with the knob and clip), antenna as a second, like in vanilla
 # =============================================================================
 def collision(_lods):
     def bx(x0, x1, y0, y1, z0, z1):
@@ -315,7 +315,7 @@ SPEC = dict(
     materials=materials,
     collision=collision,
     mass=0.25,
-    grip_shift=0.04,           # сдвиг в хвате руки, м (+ к антенне), по просьбе пользователя 25.09
+    grip_shift=0.04,           # shift in the hand grip, m (+ toward the antenna), at the owner's request, 25.09
     body_top=L.H,
     previews=[
         ("front", 0, 4, 0.78, (0.0, 0.0, 0.140)),

@@ -1,13 +1,13 @@
-"""Легенда окна частот: лица всех раций, цветом - клавиши, которые в окне работают.
+"""Frequency window legend: the faces of all radios, with color for the keys that work in the window.
 
-    python tools/render_hud_legend.py [out.jpg] [--lang ru|en|uk]      (системный Python с Pillow)
+    python tools/render_hud_legend.py [out.jpg] [--lang en|uk]      (system Python with Pillow)
 
-Без --lang - русская (docs/screenshots/hud_legend.jpg); en и uk пишут hud_legend.en.jpg / hud_legend.uk.jpg.
+Without --lang - English (docs/screenshots/hud_legend.en.jpg); --lang uk writes hud_legend.uk.jpg.
 
-Рисует из того же, из чего собрано окно: лицо - assets/<рация>/work/hud/face.png (его
-пишут render_hud_faces.py и make_hud_layouts.py), клавиши и экран - из hud_spec.py через
-ту же Frame, что строит разметку. Поменяли роли клавиш или модель - перегенерировали окно -
-перезапустили это, и картинка снова совпадает с игрой.
+Draws from the same things the window is built from: the face - assets/<radio>/work/hud/face.png (written
+by render_hud_faces.py and make_hud_layouts.py), keys and screen - from hud_spec.py through the same Frame
+that builds the layout. Changed the key roles or the model - regenerated the window - rerun this, and the
+picture matches the game again.
 """
 import os
 import sys
@@ -20,21 +20,20 @@ import hud_spec as S  # noqa: E402
 import make_hud_layouts as M  # noqa: E402
 
 ARGS = sys.argv[1:]
-LANG = ARGS[ARGS.index("--lang") + 1] if "--lang" in ARGS else "ru"
+LANG = ARGS[ARGS.index("--lang") + 1] if "--lang" in ARGS else "en"
 POS = [a for i, a in enumerate(ARGS) if not a.startswith("--") and (i == 0 or ARGS[i - 1] != "--lang")]
-OUT = POS[0] if POS else os.path.join(S.ROOT, "docs", "screenshots",
-                                      "hud_legend.jpg" if LANG == "ru" else "hud_legend.%s.jpg" % LANG)
-SEG_TTF = r"D:\modding\PDrive\gui\fonts\7segment.ttf"      # тот же шрифт, что gui/fonts/7segment в игре
+OUT = POS[0] if POS else os.path.join(S.ROOT, "docs", "screenshots", "hud_legend.%s.jpg" % LANG)
+SEG_TTF = r"D:\modding\PDrive\gui\fonts\7segment.ttf"      # the same font as gui/fonts/7segment in the game
 TEXT_TTF = r"C:\Windows\Fonts\bahnschrift.ttf"
-K = 1.35                                                   # масштаб к пикселям окна при 1080p
+K = 1.35                                                   # scale to window pixels at 1080p
 
-ROLE = {   # роль -> (цвет, подпись в легенде)
-    "digit": ((79, 195, 247), "цифры — набор частоты"),
-    "step": ((255, 213, 79), "шаг: у T-388 и LXT сразу новый канал, у остальных — соседний в строку набора"),
-    "go": ((102, 187, 106), "настроить (как TUNE у мода рации)"),
-    "back": ((239, 83, 80), "стереть цифру, а если нечего — выйти"),
-    "close": ((186, 104, 200), "выйти"),
-    "dot": ((236, 236, 236), "точка (сама — когда целая часть больше не может расти)"),
+ROLE = {   # role -> (color, legend caption)
+    "digit": ((79, 195, 247), "digits — type a frequency"),
+    "step": ((255, 213, 79), "step: T-388, LXT — new channel at once; others — neighbour in the entry line"),
+    "go": ((102, 187, 106), "tune (like TUNE in the radio mod)"),
+    "back": ((239, 83, 80), "erase a digit, or exit if there is nothing to erase"),
+    "close": ((186, 104, 200), "exit"),
+    "dot": ((236, 236, 236), "dot (inserted automatically once the integer part cannot grow any more)"),
 }
 
 
@@ -45,35 +44,20 @@ def role_of(widget):
             "BtnDot": "dot"}[widget]
 
 
-NOTES = {   # под рацией: название и короткие строки, что где
-    "pmr_t388": ("T-388 · 250 м", "стрелки — канал вниз / вверх, сразу", "красная кнопка — выйти", "экран: крупно канал, мелко частота"),
-    "lxt": ("LXT · 500 м", "стрелки — канал вниз / вверх, сразу", "экран: крупно канал,", "мелко частота"),
-    "uv5r": ("UV-5R · 1 км", "MENU — настроить", "EXIT — стереть / выйти, * — точка", "стрелки — соседний канал"),
-    "uvs9": ("UV-S9 · 2 км", "MENU — настроить", "EXIT — стереть / выйти, * — точка", "стрелки — соседний канал"),
-    "xts": ("XTS5000 · 5 км", "справа от джойстика — настроить", "слева — выйти, # — стереть / выйти",
-            "* — точка, джойстик — соседний канал"),
-    "prc152": ("PRC-152 · 10 км", "ENT — настроить", "CLR и < — стереть / выйти", "> — точка, PRE +/- — соседний канал"),
+NOTES = {   # under the radio: name and short lines of what is where
+    "pmr_t388": ("T-388 · 250 m", "arrows — channel down / up, at once", "red button — exit", "screen: big channel, small frequency"),
+    "lxt": ("LXT · 500 m", "arrows — channel down / up, at once", "screen: big channel,", "small frequency"),
+    "uv5r": ("UV-5R · 1 km", "MENU — tune", "EXIT — erase / exit, * — dot", "arrows — neighbouring channel"),
+    "uvs9": ("UV-S9 · 2 km", "MENU — tune", "EXIT — erase / exit, * — dot", "arrows — neighbouring channel"),
+    "xts": ("XTS5000 · 5 km", "right of the joystick — tune", "left — exit, # — erase / exit",
+            "* — dot, joystick — neighbouring channel"),
+    "prc152": ("PRC-152 · 10 km", "ENT — tune", "CLR and < — erase / exit", "> — dot, PRE +/- — neighbouring channel"),
 }
 ORDER = ["pmr_t388", "lxt", "uv5r", "uvs9", "xts", "prc152"]
-FOOTER = "Окно закрывают крестик в углу, клавиша K и Esc. Окно тянется мышью за корпус."
+FOOTER = "Close the window with the cross in the corner, the K key or Esc. Drag the window by the radio body."
 
-# Переводы: подписи ролей, строки под рациями и нижняя строка. Названия рацией-референсов - как в русской.
+# Translations: role captions, per-radio lines and the footer line. The reference-radio names are unchanged across languages.
 TRANSLATIONS = {
-    "en": dict(
-        roles={"digit": "digits — type a frequency",
-               "step": "step: T-388, LXT — new channel at once; others — neighbour in the entry line",
-               "go": "tune (like TUNE in the radio mod)",
-               "back": "erase a digit, or exit if there is nothing to erase",
-               "close": "exit",
-               "dot": "dot (inserted automatically once the integer part cannot grow any more)"},
-        notes={"pmr_t388": ("T-388 · 250 m", "arrows — channel down / up, at once", "red button — exit", "screen: big channel, small frequency"),
-               "lxt": ("LXT · 500 m", "arrows — channel down / up, at once", "screen: big channel,", "small frequency"),
-               "uv5r": ("UV-5R · 1 km", "MENU — tune", "EXIT — erase / exit, * — dot", "arrows — neighbouring channel"),
-               "uvs9": ("UV-S9 · 2 km", "MENU — tune", "EXIT — erase / exit, * — dot", "arrows — neighbouring channel"),
-               "xts": ("XTS5000 · 5 km", "right of the joystick — tune", "left — exit, # — erase / exit",
-                       "* — dot, joystick — neighbouring channel"),
-               "prc152": ("PRC-152 · 10 km", "ENT — tune", "CLR and < — erase / exit", "> — dot, PRE +/- — neighbouring channel")},
-        footer="Close the window with the cross in the corner, the K key or Esc. Drag the window by the radio body."),
     "uk": dict(
         roles={"digit": "цифри — набір частоти",
                "step": "крок: у T-388 і LXT одразу новий канал, в решти — сусідній у рядок набору",
@@ -126,9 +110,9 @@ def panel(radio):
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     img.alpha_composite(face)
 
-    # экран - как в игре: сегментный шрифт с погасшими 888 или текст точечной матрицы.
-    # Текст - на отдельном слое: ImageDraw на RGBA заменяет пиксель вместе с альфой, и
-    # полупрозрачные призраки протыкали бы лицо насквозь (та же ловушка, что была с ЖКИ).
+    # screen - like in the game: a segment font with unlit 888, or dot-matrix text.
+    # Text is on a separate layer: ImageDraw on RGBA replaces the pixel together with the alpha, and
+    # semi-transparent ghosts would punch straight through the face (the same trap the LCD had).
     layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
     ghosts = Image.new("RGBA", img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
@@ -154,7 +138,7 @@ def panel(radio):
     img.alpha_composite(layer)
     d = ImageDraw.Draw(img)
 
-    # клавиши: рамка цвета роли вокруг поля нажатия
+    # keys: a frame in the role's color around the hit area
     for widget, x, z, w, h, rnd in S.keys(radio):
         col = ROLE[role_of(widget)][0]
         bx, by, bw, bh = [v * K for v in f.ui_rect(x - w / 2 - M.KEY_PAD, x + w / 2 + M.KEY_PAD,
@@ -165,7 +149,7 @@ def panel(radio):
         else:
             d.rounded_rectangle(box, radius=min(bw, bh) * 0.25, outline=col + (255,), width=3)
 
-    # крестик в углу окна - есть у всех
+    # the cross in the window's corner - every radio has one
     cs = 26 * K
     x0, y0 = W - cs - 6 * K, 6 * K
     d.ellipse((x0, y0, x0 + cs, y0 + cs), fill=(26, 26, 28, 230), outline=ROLE["close"][0] + (255,), width=3)
@@ -199,7 +183,7 @@ def main():
             d.text((cx, margin + ph + 68 + 26 * i), n, font=note_f, fill=(176, 178, 184), anchor="mm")
         x += cw + gap
 
-    # легенда: цвет - что делает клавиша
+    # legend: color - what the key does
     ly = margin + ph + 170
     lx = margin
     items = list(ROLE.values())

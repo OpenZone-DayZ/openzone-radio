@@ -1,33 +1,33 @@
-"""Раскладка рации на 50..250 м (детская PMR-«мыльница» T-388) - общие числа для геометрии и печати.
+"""Layout of the 50..250 m radio (toy PMR "soap-bar" T-388) - shared numbers for geometry and printing.
 
-Координаты модели: X вправо, Y назад (лицо смотрит в -Y), Z вверх, метры; начало - центр дна.
-Референс (biofrost, «Dirty Walkie Talkie», Sketchfab): корпус из двух частей - верх со
-щитком-рамкой из серебристого пластика вокруг ЖКИ и кнопок, низ - прорезиненный, с волнами
-хвата по бокам и большим динамиком, дырки которого разбегаются лучами. Короткая толстая антенна
-слева сверху. Грязная, потёртая, стекло ЖКИ треснуло.
-Пропорции сняты с рендера: корпус 400x770 px -> при ширине 56 мм высота 108 мм.
+Model coordinates: X right, Y back (the face looks toward -Y), Z up, meters; origin is the center of the bottom.
+Reference (biofrost, "Dirty Walkie Talkie", Sketchfab): the body has two parts - the top with a
+silver-plastic shield-frame around the LCD and buttons, the bottom rubberized, with grip waves on
+the sides and a large speaker whose holes radiate outward. A short, thick antenna at the top left.
+Dirty, worn, the LCD glass is cracked.
+Proportions taken from the render: body 400x770 px -> at a width of 56 mm the height is 108 mm.
 
-Высоты деталей лица перемерены 24.09 по центральной вертикали референса (x = 867 px: низ
-корпуса y = 1030, верх y = 253, 0.139 мм/px; по горизонтали ЖКИ 178 px = 25 мм). Прежняя раскладка
-сидела на 5-8 мм выше, и шов корпуса пришёлся прямо на ряд CALL / TALK / MON. У референса шов -
-«улыбка» под этим рядом: кнопки целиком на верхней оболочке, до шва доходит только низ TALK.
+The face detail heights were re-measured on 24.09 along the reference's central vertical (x = 867
+px: bottom of the body y = 1030, top y = 253, 0.139 mm/px; horizontally the LCD is 178 px = 25 mm).
+The previous layout sat 5-8 mm higher, and the body seam landed right on the CALL / TALK / MON row.
+In the reference the seam is a "smile" under that row: the buttons sit entirely on the upper shell, and only the bottom of TALK reaches the seam.
 """
 
-MODEL = "ШЕПТУН"      # имя модели OZ-COM (выбор пользователя 25.09); T-388 - только референс
+MODEL = "ШЕПТУН"      # OZ-COM model name (the owner's choice, 25.09); T-388 is only the reference
 
-# --- корпус -------------------------------------------------------------------
+# --- body -------------------------------------------------------------------
 W = 0.056
 H = 0.108
-YF = -0.015          # плоскость лица
-YB = 0.014           # тыл
-R_TOP = 0.0075       # скругление верхних углов (вид спереди)
-BEV = 0.0045         # скругление кромок лица/тыла - «игрушечная» мягкая форма
-# шов между верхней оболочкой и прорезиненным низом: дуга, ниже всего под TALK, к бокам выше.
-# Обе части заподлицо, между ними только узкая канавка (SEAM_BEV, на детальной модели)
-SEAM_Z = 0.0558      # шов посередине
-SEAM_RISE = 0.0044   # подъём шва к бокам
+YF = -0.015          # plane of the face
+YB = 0.014           # back
+R_TOP = 0.0075       # rounding of the top corners (front view)
+BEV = 0.0045         # bevel of the face/back edges - a "toy-like" soft shape
+# seam between the upper shell and the rubberized bottom: an arc, lowest under TALK, rising toward
+# the sides. Both parts are flush, with only a narrow groove between them (SEAM_BEV, on the detailed model)
+SEAM_Z = 0.0558      # seam at the middle
+SEAM_RISE = 0.0044   # rise of the seam toward the sides
 SEAM_BEV = 0.0006
-# волны хвата на боках нижней части: (z-центр, выступ), по обеим сторонам
+# grip waves on the sides of the lower part: (z-center, protrusion), on both sides
 GRIP_WAVES = [(0.050, 0.0010), (0.0345, 0.0016), (0.0195, 0.0015), (0.0085, 0.0008)]
 
 
@@ -35,16 +35,16 @@ def seam_z(x):
     return SEAM_Z + SEAM_RISE * (x / (W / 2)) ** 2
 
 
-# --- щиток-рамка ЖКИ (серебристый) ----------------------------------------------------
-# сверху до z1, бока до z_side, дальше скос внутрь к низу z0 на +-x_bot; вокруг кнопок щиток
-# вырезан с зазором BEZEL_GAP, и между CALL, TALK и MON от него остаются зубцы вниз
+# --- LCD shield-frame (silver) ----------------------------------------------------
+# from the top down to z1, the sides down to z_side, then it slants inward to the bottom z0 at
+# +-x_bot; around the buttons the shield is cut out with a BEZEL_GAP gap, and between CALL, TALK and MON it leaves downward-pointing teeth
 BEZEL = dict(w=0.0358, z1=0.1012, z_side=0.0745, z0=0.0653, x_bot=0.0138, r_top=0.0075, proud=0.0012)
 BEZEL_GAP = 0.0006
 LCD_WIN = dict(cx=0.0, cz=0.0827, w=0.0249, h=0.0158, r=0.0015, depth=0.0008)
-MODEL_Z = 0.0920     # имя модели в полосе между маркой и ЖКИ
-BRAND_Z = 0.0953     # марка на серебристом щитке над ЖКИ (середина заглавных)
+MODEL_Z = 0.0920     # model name in the strip between the brand and the LCD
+BRAND_Z = 0.0953     # brand on the silver shield above the LCD (middle of the capitals)
 
-# --- кнопки: (x, z, rx, rz, материал, надпись) - овалы/круги ---------------------------
+# --- buttons: (x, z, rx, rz, material, label) - ovals/circles ---------------------------
 BUTTONS = [
     (-0.0191, 0.0857, 0.0027, 0.0027, "btn_blue", "LAMP"),
     (0.0191, 0.0832, 0.0024, 0.0024, "btn_red", "pwr"),
@@ -59,15 +59,15 @@ BUTTONS = [
 LED = (0.0195, 0.0655, 0.0012)
 BTN_PROUD = 0.0018
 
-# --- динамик: приподнятая панель с дырками лучами --------------------------------------
+# --- speaker: raised panel with holes radiating outward --------------------------------------
 SPK = dict(cx=0.0, cz=0.0296, w=0.0410, h=0.0504, r=0.0090, proud=0.0012)
 SPK_HOLES = dict(cx=0.0, cz=0.0298, r=0.0015, rings=[(0.0, 1), (0.0050, 6), (0.0093, 12), (0.0134, 12),
                                                      (0.0174, 12)], depth=0.0014)
 
-# --- верх: толстая короткая антенна слева --------------------------------------------------
+# --- top: thick short antenna at the left --------------------------------------------------
 ANT = dict(x=-0.0145, y=-0.0005, collar_r=0.0082, r0=0.0070, r1=0.0060, z_collar=H + 0.0070, top=H + 0.052)
 
-# --- тыл: крышка батарейного отсека и клипса ------------------------------------------------
+# --- back: battery door and clip ------------------------------------------------------
 DOOR = dict(w=0.042, z0=0.007, z1=0.052, r=0.005)
 CLIP_W, CLIP_TOP, CLIP_BOT = 0.022, 0.094, 0.050
 

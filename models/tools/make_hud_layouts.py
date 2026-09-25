@@ -1,19 +1,19 @@
-"""Окно частот «лицом рации»: текстуры и разметка из рендера лица и чисел раскладки.
+"""Frequency window "as the radio's face": textures and layout from the face render and the layout numbers.
 
-    python tools/make_hud_layouts.py [рация ...]      (системный Python с Pillow)
+    python tools/make_hud_layouts.py [radio ...]      (system Python with Pillow)
 
-Перед ним - tools/render_hud_faces.py (Blender), он пишет assets/<рация>/work/hud/face_raw.png.
-Этот скрипт:
-  - стирает с экрана рации запечённые «призраки» сегментов: в окне экран живой, и призраки
-    рисует разметка тем же шрифтом, что и цифры, - иначе они не совпали бы с цифрами;
-  - пишет всё в .edds (формат ванильных картинок интерфейса: несжатый BGRA8 с мипами) в
-    OpenZone_Radio/gui/faces/ основного мода, значения - линейные (см. write_edds: интерфейс сам
-    кодирует пиксели в sRGB, и записанное как есть выходило блёклым). В .paa нельзя:
-    DXT5 с линейными значениями ломает тёмные тона на пятна;
-  - пишет разметку OpenZone_Radio/gui/layouts/oz_face_<s>.layout.
+Before it comes tools/render_hud_faces.py (Blender), which writes assets/<radio>/work/hud/face_raw.png.
+This script:
+  - erases the baked-in segment "ghosts" from the radio's screen: in the window the screen is live, and the
+    layout draws the ghosts with the same font as the digits - otherwise they would not line up with the digits;
+  - writes everything to .edds (the format of the vanilla interface pictures: uncompressed BGRA8 with mips) in
+    the main mod's OpenZone_Radio/gui/faces/, values are linear (see write_edds: the interface encodes
+    pixels to sRGB itself, and writing them as-is came out washed out). .paa will not do:
+    DXT5 with linear values breaks dark tones into blotches;
+  - writes the layout to OpenZone_Radio/gui/layouts/oz_face_<s>.layout.
 
-Имена виджетов читает OpenZone_Radio/scripts/5_Mission/OpenZone_Radio/OZR_FreqMenuFace.c
-(см. hud_spec.py - роли клавиш).
+Widget names are read by OpenZone_Radio/scripts/5_Mission/OpenZone_Radio/OZR_FreqMenuFace.c
+(see hud_spec.py - key roles).
 """
 import os
 import sys
@@ -24,28 +24,28 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import hud_spec as S  # noqa: E402
 
-# Лица окна - часть основного мода: папка OpenZone_Radio рядом с models/, префикс pbo тот же.
+# The window faces are part of the main mod: the OpenZone_Radio folder next to models/, same pbo prefix.
 PBO = os.path.normpath(os.path.join(S.ROOT, "..", "OpenZone_Radio"))
 PREFIX = "OpenZone_Radio"
 
 SEG_FONT = "gui/fonts/7segment48"
 TEXT_FONT = "gui/fonts/sdf_MetronBook24"
-KEY_PAD = 0.0008          # м: поле нажатия шире самой клавиши
+KEY_PAD = 0.0008          # m: the hit area is wider than the key itself
 
 
-# Интерфейс DayZ кодирует пиксели картинки в sRGB при выводе (цвет виджета, заданный числом,
-# - нет). Значит, в текстуре окна должны лежать ЛИНЕЙНЫЕ значения. Проверено в игре 24.09 на
-# одной сборке: лицо, записанное как есть, вышло блёклым (85 -> 156, 118 -> 181 - ровно
-# формула sRGB), линеаризованное - с цветами рендера. Суффикс _ca у .paa на это не влияет.
+# The DayZ interface encodes a picture's pixels to sRGB on output (a widget color given as a number
+# is not encoded). So the window texture must hold LINEAR values. Verified in-game on 24.09 with
+# one build: the face written as-is came out washed out (85 -> 156, 118 -> 181 - exactly the
+# sRGB formula), the linearized one matched the render's colors. The .paa suffix _ca does not affect this.
 _SRGB_TO_LIN = [int(round(255 * (((v / 255 + 0.055) / 1.055) ** 2.4 if v > 10 else v / 255 / 12.92)))
                 for v in range(256)]
 
 
 def write_edds(img, path, linear):
-    """RGBA -> .edds в формате ванильных картинок интерфейса (P:/gui: 175 файлов из 197):
-    DDS-заголовок с меткой ENF1, несжатый BGRA8, полная цепочка мипов; за заголовком таблица
-    блоков от меньшего мипа к большему ("COPY" + размер), затем сами мипы в том же порядке.
-    Разобрано по gui/fonts/7segment22.edds."""
+    """RGBA -> .edds in the format of the vanilla interface pictures (P:/gui: 175 of 197 files):
+    a DDS header tagged ENF1, uncompressed BGRA8, the full mip chain; after the header a table of
+    blocks from the smallest mip to the largest ("COPY" + size), then the mips themselves in the same order.
+    Reverse-engineered from gui/fonts/7segment22.edds."""
     import struct
     img = img.convert("RGBA")
     if linear:
@@ -70,13 +70,13 @@ def write_edds(img, path, linear):
 
 
 class Frame:
-    """Метры модели -> пиксели окна (1080p) и пиксели текстуры лица."""
+    """Model meters -> window pixels (1080p) and face texture pixels."""
 
     def __init__(self, radio):
         self.radio = radio
         self.spec = S.RADIOS[radio]
-        self.s = self.spec["scale"]                   # px окна на мм
-        self.t = S.tex_ppmm(radio)                    # px текстуры на мм
+        self.s = self.spec["scale"]                   # window px per mm
+        self.t = S.tex_ppmm(radio)                    # texture px per mm
         self.x0, self.x1, self.z0, self.z1 = S.region(radio)
         self.w = (self.x1 - self.x0) * 1000 * self.s
         self.h = (self.z1 - self.z0) * 1000 * self.s
@@ -92,20 +92,20 @@ class Frame:
         return a, b, c - a, d - b
 
 
-# ---------------------------------------------------------------------------- картинки
+# ---------------------------------------------------------------------------- pictures
 def clean_face(f):
-    """Экран без запечённых призраков: ровная подложка цвета самого экрана."""
+    """The screen without baked-in ghosts: a flat backing in the screen's own color."""
     src = os.path.join(S.ROOT, "assets", f.radio, "work", "hud", "face_raw.png")
     img = Image.open(src).convert("RGBA")
     x0, x1, z0, z1 = S.lcd_rect(f.radio)
     (a, b), (c, d) = f.tex(x0, z1), f.tex(x1, z0)
-    inset = 0.0006 * 1000 * f.t                       # рамка стекла остаётся с рендера
+    inset = 0.0006 * 1000 * f.t                       # the glass frame is kept from the render
     box = (int(a + inset), int(b + inset), int(c - inset), int(d - inset))
     core = img.crop((box[0] + (box[2] - box[0]) // 4, box[1] + (box[3] - box[1]) // 4,
                      box[2] - (box[2] - box[0]) // 4, box[3] - (box[3] - box[1]) // 4)).convert("RGB")
     base = core.resize((1, 1), Image.BOX).getpixel((0, 0))
     base = tuple(min(255, int(v * 1.06)) for v in base)
-    # подложка с лёгкой виньеткой к краям - как у настоящего ЖКИ за стеклом
+    # a backing with a slight vignette toward the edges - like a real LCD behind glass
     bw, bh = box[2] - box[0], box[3] - box[1]
     pane = Image.new("RGBA", (bw, bh), base + (255,))
     shade = Image.new("L", (bw, bh), 0)
@@ -122,7 +122,7 @@ def clean_face(f):
 
 
 
-# ---------------------------------------------------------------------------- разметка
+# ---------------------------------------------------------------------------- layout
 def attrs(x, y, w, h, prio, ignore=True, extra=()):
     lines = [" visible 1"]
     if ignore:
@@ -144,10 +144,10 @@ def text(name, x, y, w, h, value, font, size, color, halign, prio=4):
 
 
 def lcd_lines(f):
-    """(имя, строка-призрак, доля высоты экрана, выравнивание) сверху вниз.
+    """(name, ghost string, share of the screen height, alignment) top to bottom.
 
-    Сегментный экран: призрак - погасшие сегменты тем же шрифтом, что и цифры, поэтому совпадает
-    с ними знак в знак. У точечной матрицы погасших сегментов нет - и призрака нет."""
+    Segment screen: the ghost is the unlit segments in the same font as the digits, so it lines up
+    with them digit for digit. The dot matrix has no unlit segments - and no ghost."""
     seg = f.spec["lcd"] == "seg"
     if f.spec["mode"] == "step":
         return [("LcdMain", "888" if seg else "", 0.62, "right"), ("LcdSub", "888.888" if seg else "", 0.38, "center")]
@@ -157,8 +157,8 @@ def lcd_lines(f):
 
 def layout(f):
     stem = f.spec["stem"]
-    out = ["// Окно частот «лицом рации» (%s). СГЕНЕРИРОВАНО tools/make_hud_layouts.py - руками не править." % stem,
-           "// Имена читают OZR_FreqMenu.c и OZR_FreqMenuFace.c: DragBar, TitleText, HintText, BtnClose,",
+    out = ["// The frequency window with the face of the radio (%s). GENERATED by models/tools/make_hud_layouts.py - do not edit by hand." % stem,
+           "// The names are read by OZR_FreqMenu.c and OZR_FreqMenuFace.c: DragBar, TitleText, HintText, BtnClose,",
            "// Btn0..Btn9, BtnUp, BtnDown, BtnGo, BtnDot, BtnBack, LcdMain, LcdSub, Face.",
            "",
            "FrameWidgetClass Card {",
@@ -168,7 +168,7 @@ def layout(f):
     tw, th = S.TEX_W / f.t * f.s, S.TEX_H / f.t * f.s
     body += widget("ImageWidgetClass", "Face", attrs(0, 0, tw, th, 1, extra=(
         'image0 "%s/gui/faces/oz_face_%s.edds"' % (PREFIX, stem), "mode blend", '"src alpha" 1', "stretch 1", "filter 1")))
-    # за корпус тянут окно: всё, что не клавиша, - ручка перетаскивания (OZR_FreqMenu ждёт имя DragBar)
+    # the window is dragged by the body: everything that is not a key is the drag handle (OZR_FreqMenu expects the name DragBar)
     body += widget("PanelWidgetClass", "DragBar", attrs(0, 0, f.w, f.h, 2, ignore=False, extra=("color 0 0 0 0",)))
 
     lx, ly, lw, lh = f.ui_rect(*S.lcd_rect(f.radio))
@@ -179,8 +179,8 @@ def layout(f):
     for name, ghost, share, halign in lcd_lines(f):
         hh = lh * share
         pad = lw * 0.06
-        # сегментный шрифт моноширинный и узкий; текстовый шире - «136.000» (7 знаков) должно
-        # влезть в ширину экрана: на XTS при 0.8 высоты строки последний ноль обрезался
+        # the segment font is monospaced and narrow; the text font is wider - "136.000" (7 characters) must
+        # fit the screen width: on the XTS at 0.8 of the line height the last zero was getting clipped
         size = int(round(hh * 0.95)) if seg else int(min(hh * 0.80, (lw - 2 * pad) / (7 * 0.60)))
         if ghost:
             body += text(name + "Ghost", lx + pad, y, lw - 2 * pad, hh, ghost, font, size, ink + "0.07", halign, prio=3)
@@ -192,7 +192,7 @@ def layout(f):
         body += widget("ButtonWidgetClass", role, attrs(bx, by, bw, bh, 5, ignore=False, extra=(
             'text ""', "color 1 1 1 0")))
 
-    # крестик: у раций без EXIT это единственный выход мышью (K и Esc закрывают всегда)
+    # the cross: on radios without EXIT this is the only way out with the mouse (K and Esc always close)
     cs = 26
     body += widget("ImageWidgetClass", "BtnCloseBg", attrs(f.w - cs - 6, 6, cs, cs, 5, extra=(
         'image0 "set:dayz_gui image:circle"', "mode blend", '"src alpha" 1', "stretch 1",
@@ -201,7 +201,7 @@ def layout(f):
         'text ""', "color 1 1 1 0")))
     body += text("BtnCloseLabel", f.w - cs - 6, 7, cs, cs, "X", TEXT_FONT, 17, "0.92 0.92 0.92 1", "center", prio=7)
 
-    # подпись под рацией: название и подсказка
+    # the caption under the radio: name and hint
     body += widget("PanelWidgetClass", "CaptionBg", attrs(0, f.h, f.w, S.CAPTION, 2, ignore=False, extra=(
         "color 0.055 0.059 0.071 0.85", "style rover_sim_colorable")))
     body += text("TitleText", 10, f.h + 3, f.w - 20, 20, "", TEXT_FONT, 17, "0.85 0.85 0.87 1", "left")

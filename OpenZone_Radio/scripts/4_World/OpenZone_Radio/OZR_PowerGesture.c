@@ -1,17 +1,18 @@
-// Жест включения и выключения рации - свой у модели.
+// The switch-on and switch-off gesture, per model.
 //
-// Ваниль включает любую рацию общим жестом «включить предмет» (CMD_ACTIONMOD_ITEM_ON/OFF).
-// Кнопочным рациям больше подходит нажатие кнопки большим пальцем - жест GPS-приёмника
-// (ActionTurnOnWhileInHands выбирает его для GPSReceiver). Какой жест у класса - поле
-// ozrPowerGesture в его конфиге: "press" - кнопка; нет поля - ванильный жест.
+// Vanilla switches every radio on with the generic "turn item on" gesture
+// (CMD_ACTIONMOD_ITEM_ON/OFF). A push-button radio suits a thumb press better: the GPS
+// receiver's gesture (ActionTurnOnWhileInHands picks it for GPSReceiver). Which gesture a
+// class gets is the ozrPowerGesture field of its config: "press" - the button; no field -
+// the vanilla gesture.
 //
-// Ванильная подмена по предмету (ItemBase.OverrideActionAnimation) ключуется скриптовым
-// типом, а у раций OZ_Radio_* своих скриптовых классов нет - все они PersonalRadio. Поэтому
-// подменяем в самом действии, по конфигу класса предмета.
+// Vanilla's per-item override (ItemBase.OverrideActionAnimation) is keyed by script type,
+// and the OZ_Radio_* sets have no script classes of their own - they are all PersonalRadio.
+// So the override happens in the action itself, by the item class's config.
 
 class OZR_PowerGesture
 {
-    // Команда жеста для предмета, или -1 - оставить ванильную.
+    // The gesture command for the item, or -1 - keep the vanilla one.
     static int For(ActionData data)
     {
         if (!data || !data.m_MainItem || !data.m_Player)
@@ -27,10 +28,11 @@ class OZR_PowerGesture
     }
 }
 
-// Жест кнопки есть только в наборе анимаций GPS-приёмника (player_main_1h_GPSReciever.asi).
-// Рация в руке берёт общий однорочный набор, где его нет, - подмена команды одна ничего не
-// проигрывала (проверено пользователем 25.09). Поэтому кнопочные рации получают набор GPS
-// и позу хвата GPS (GPSReciever.anm) - держатся как GPS-приёмник.
+// The button gesture exists only in the GPS receiver's animation set
+// (player_main_1h_GPSReciever.asi). A radio in hand takes the generic one-handed set, which
+// lacks it - overriding the command alone played nothing (checked by the owner 2026-09-25).
+// So the push-button sets get the GPS set and the GPS grip pose (GPSReciever.anm) - they are
+// held like a GPS receiver.
 modded class ModItemRegisterCallbacks
 {
     override void RegisterOneHanded(DayZPlayerType pType, DayzPlayerItemBehaviorCfg pBehavior)
@@ -38,8 +40,8 @@ modded class ModItemRegisterCallbacks
         super.RegisterOneHanded(pType, pBehavior);
 
         string asi = "dz/anims/workspaces/player/player_main/props/player_main_1h_GPSReciever.asi";
-        string anm = "dz/anims/anm/player/ik/gear/GPSReciever.anm";   // и хват как у GPS - выбор пользователя 25.09
-        array<string> press = {"OZ_Radio_250m"};   // кнопочные - те, у кого ozrPowerGesture = "press"
+        string anm = "dz/anims/anm/player/ik/gear/GPSReciever.anm";   // and the GPS grip - the owner's choice, 2026-09-25
+        array<string> press = {"OZ_Radio_250m"};   // the push-button sets: those with ozrPowerGesture = "press"
         foreach (string cls : press)
             pType.AddItemInHandsProfileIK(cls, asi, pBehavior, anm);
     }

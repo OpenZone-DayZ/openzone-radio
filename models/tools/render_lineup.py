@@ -1,9 +1,9 @@
-"""Общий снимок: все шесть игровых моделей (LOD1 с запечёнными текстурами) в ряд.
+"""Group shot: all six in-game models (LOD1 with baked textures) in a row.
 
     blender -b -P tools/render_lineup.py -- [out.jpg]
 
-Берёт объект LOD1 и материалы превью из assets/<рация>/work/<рация>_game.blend (их пишет
-radiokit.run), ставит рации по возрастанию дальности и рендерит в docs/screenshots.
+Takes the LOD1 object and preview materials from assets/<radio>/work/<radio>_game.blend (written by
+radiokit.run), lines the radios up by increasing range and renders them into docs/screenshots.
 """
 import os
 import sys
@@ -37,13 +37,13 @@ for r in RADIOS:
     objs.append(ob)
 
 cam = K.studio(bg=(0.26, 0.27, 0.28))
-# пол - ловец теней: без теней рации висят в пустоте, а видимый пол даёт кромку-горизонт
+# the floor is a shadow catcher: without shadows the radios float in a void, and a visible floor gives a horizon edge
 bpy.ops.mesh.primitive_plane_add(size=6.0, location=(x / 2, 0.0, 0.0))
 bpy.context.active_object.is_shadow_catcher = True
 sc = bpy.context.scene
 sc.render.resolution_x, sc.render.resolution_y = 2400, 1500
 sc.cycles.samples = 128
-# кадр ~0.8 м в ширину: ряд занимает его почти целиком, антенна PRC (0.45 м) влезает по высоте
+# the frame is ~0.8 m wide: the row fills almost all of it, the PRC antenna (0.45 m) fits in height
 mid = Vector(((x - 0.035) / 2, 0.0, 0.215))
 K.aim(cam, yaw=-12, pitch=9, dist=1.9, target=mid)
 cam.data.lens = 85

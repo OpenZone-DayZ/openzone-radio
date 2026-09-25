@@ -1,6 +1,6 @@
-"""Печать рации на 500/750 м: логотип, подписи кнопок, янтарный ЖКИ, PTT, наклейка тыла, ленты.
+"""Prints for the 500/750 m radio: logo, button captions, amber LCD, PTT, back label, bands.
 
-    python make_prints_lxt.py          (системный Python с Pillow)
+    python make_prints_lxt.py          (system Python with Pillow)
 """
 import os
 import random
@@ -29,7 +29,7 @@ def lock_icon(cv, x, z, s, fill):
 def front():
     cv = T.Canvas(*L.FRONT_RECT, ppm=L.PPM)
     b = L.BEZEL
-    # надпись над ЖКИ на рамке: красное начало, тёмный хвост
+    # caption above the LCD on the bezel: red at the start, dark at the tail
     zt = b["cz"] + b["h"] / 2 - 0.0026
     cv.text("MAX", -0.0046, zt, 0.0013, "verdana_b", RED)
     cv.text("-TALK", 0.0032, zt, 0.0013, "verdana_b", INK)
@@ -57,7 +57,7 @@ def front():
 
 
 def lcd():
-    """Выключенный янтарный ЖКИ: тёплое серо-жёлтое поле, тёмные призрачные сегменты и значки."""
+    """Powered-off amber LCD: a warm grey-yellow field, dark ghost segments and icons."""
     bg, cv = T.lcd_canvas(L.LCD_RECT, L.PPM, (150, 132, 86), (104, 90, 58), vignette=0.45, blur=30)
     x0, x1, z0, z1 = L.LCD_RECT
     ghost = (60, 48, 20, 34)
@@ -77,7 +77,7 @@ def right_side():
 
 
 def back():
-    """Наклейка на крышке отсека: паспорт рации мелким шрифтом."""
+    """Label on the battery door: the radio's spec sheet in small print."""
     cv = T.Canvas(*L.BACK_RECT, ppm=L.PPM)
     x0, x1, z0, z1 = -0.0185, 0.0185, 0.012, 0.038
     cv.rect(x0, z0, x1, z1, fill=(176, 176, 170, 255), r=0.0012)

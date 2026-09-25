@@ -1,4 +1,4 @@
-"""Рация на 5000 м (по мотивам Motorola XTS5000): детальная модель, лоды, запекание, текстуры, p3d.
+"""Radio with 5000 m range (modeled after the Motorola XTS5000): detailed model, LODs, baking, textures, p3d.
 
     python make_prints_xts.py
     blender -b -P build_xts.py -- [--high-only] [--skip-bake] [--no-previews]
@@ -15,7 +15,7 @@ import layout_xts as L  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
 TEX = os.path.normpath(os.path.join(HERE, "..", "textures"))
-YFF = L.YF - L.FACE["proud"]           # лицо передней накладки
+YFF = L.YF - L.FACE["proud"]           # face of the front overlay
 
 
 def P(name):
@@ -73,7 +73,7 @@ def face(m):
         for i in range(nx):
             for j in range(nz):
                 x, z = g["x0"] + i * g["pitch"], g["z0"] + j * g["pitch"]
-                # как у референса - решётка с пропусками: углы срезаны, по краям через одно
+                # like in the reference - a grille with gaps: corners are cut, every other one along the edges
                 edge = i in (0, nx - 1) or j in (0, nz - 1)
                 if (i + j) % 2 and edge:
                     continue
@@ -94,7 +94,7 @@ def lcd_frame(m):
     if m.upto(1):
         cuts.append(K.prism(K.rrect(w["w"], w["h"], w["r"], w["cx"], w["cz"], seg=m.s(4, 1)), yf - 0.001,
                             yf + w["depth"], "Y"))
-    if m.hi:     # перегородки между программируемыми клавишами
+    if m.hi:     # partitions between the programmable keys
         for x in (-0.0059, 0.0059):
             cuts.append(K.prism(K.rect(0.0004, 0.0090, x, 0.0670), yf - 0.001, yf + 0.0004, "Y"))
     m.add(bm, "frame", name="LcdFrame", bevel_=(0.0008, (3, 1, 0)), cuts=cuts, bevel_angle=45.0)
@@ -127,7 +127,7 @@ def keypad(m):
 
 def top(m):
     v, c, t, a = L.VOL, L.CHAN, L.TOGGLE, L.ANT
-    # ручка громкости: рифлёный цилиндр с куполом
+    # volume knob: a knurled cylinder with a dome
     if m.hi:
         m.add(K.prism(K.knurl(v["x"], v["y"], v["r"] * 0.92, v["r"], 22, (0.0, 0.2, 0.5, 0.7)), v["z0"],
                       v["z0"] + v["h"] * 0.7, "Z"), "rubber", name="Volume", bevel_=(0.0003, (2,)), bevel_angle=60.0)
@@ -140,7 +140,7 @@ def top(m):
     else:
         m.add(K.cyl(v["x"], v["y"], v["r"] * 0.97, L.H - 0.001, v["z0"] + v["h"] * 0.9, m.s(0, 14, 8, 6, 5), "Z"),
               "rubber", name="Volume", bevel_=(0.0012, (0, 1, 0)), bevel_angle=60.0)
-    # переключатель каналов: цилиндр + Т-образная головка
+    # channel switch: a cylinder + a T-shaped head
     if m.upto(3):
         m.add(K.cyl(c["x"], c["y"], c["r"], L.H - 0.001, c["z0"] + 0.0055, m.s(36, 12, 8, 6), "Z"), "rubber",
               name="ChanBase", bevel_=(0.0006, (3, 1, 0)), bevel_angle=60.0)
@@ -152,7 +152,7 @@ def top(m):
         lever = K.cyl(t["x"], t["y"], 0.0009, L.H + 0.001, L.H + t["h"], 12, "Z")
         K.rotate(lever, 18.0, "Y", (t["x"], t["y"], L.H + 0.001))
         m.add(lever, "steel", name="ToggleLever")
-    # антенна: рифлёное основание и тонкий штырь с шариком
+    # antenna: a knurled base and a thin whip with a ball
     zb, zt = a["z_base"], a["top"]
     if m.hi:
         prof = [(0.0, L.H - 0.001), (a["base_r"], L.H - 0.001)]
@@ -183,7 +183,7 @@ def left_side(m):
         n = m.s(40, 14, 8)
         bm = K.prism(ellipse(p["y"], p["z"], p["r"] * 0.82, p["r"] * 1.15, n), xs + 0.0015, xs - p["proud"], "X")
         cuts = None
-        if m.hi:     # рифление PTT: поперечные канавки
+        if m.hi:     # PTT knurling: transverse grooves
             cuts = [K.merge(*[K.prism(K.rect(0.03, 0.0006, p["y"], p["z"] + (i - 3) * 0.0028), xs - p["proud"] + 0.0004,
                                       xs - p["proud"] - 0.002, "X") for i in range(7)])]
         m.add(bm, "rubber", name="PTT", bevel_=(0.0012, (3, 1, 0)), cuts=cuts, bevel_angle=50.0)
@@ -205,8 +205,8 @@ def battery(m):
 
 
 def clip_offset(z):
-    """Отход пластины клипсы от корпуса: чистый сдвиг, пластина остаётся ПЛОСКОЙ. Изгиб делал
-    неплоскую n-угольную крышку, и её триангуляция складкой давала тёмный «ромб» посередине."""
+    """Offset of the clip plate from the body: a pure shift, the plate stays FLAT. Bending produced
+    a non-flat n-gon cap, and its fold triangulation gave a dark "diamond" in the middle."""
     return 0.0038 * (L.CLIP_TOP - z) / (L.CLIP_TOP - L.CLIP_BOT)
 
 
@@ -263,7 +263,7 @@ SPEC = dict(
     materials=materials,
     collision=collision,
     mass=0.40,
-    grip_shift=-0.02,           # сдвиг в хвате руки, м (+ к антенне), по просьбе пользователя 25.09
+    grip_shift=-0.02,           # shift in the hand grip, m (+ toward the antenna), at the owner's request, 25.09
     body_top=L.H,
     previews=[
         ("front", 0, 4, 0.82, (0.0, 0.0, 0.150)),

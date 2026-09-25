@@ -1,11 +1,12 @@
-"""Рация на 50..250 м (детская PMR T-388): детальная модель, лоды, запекание, текстуры, p3d.
+"""Radio, 50..250 m range (toy PMR T-388): detailed model, LODs, baking, textures, p3d.
 
     python make_prints_t388.py
     blender -b -P build_t388.py -- [--high-only] [--skip-bake] [--no-previews]
 
-Корпус из двух частей, как у референса: верхняя оболочка со щитком ЖКИ и нижняя, прорезиненная, с
-волнами хвата по бокам и динамиком. Части заподлицо, шов между ними - дуга под рядом CALL / TALK /
-MON с узкой канавкой (раньше обе части скруглялись и на шве, и кнопки стояли в V-образной щели).
+The body has two parts, like the reference: an upper shell with the LCD shield, and a lower,
+rubberized part with grip waves on the sides and the speaker. The parts sit flush, and the seam
+between them is an arc under the CALL / TALK / MON row with a narrow groove (previously both parts
+were rounded across the seam too, and the buttons sat in a V-shaped gap).
 """
 import math
 import os
@@ -60,17 +61,17 @@ def materials():
 
 
 # =============================================================================
-# Корпус
+# Body
 # =============================================================================
 def seam_line(m):
-    """Шов слева направо по дуге L.seam_z. Отрезков мало нарочно: скругление бока, упираясь в шов,
-    съезжает по крайнему отрезку на всю ширину L.BEV, и отрезок должен быть длиннее неё."""
+    """The seam runs left to right along the L.seam_z arc. Few segments on purpose: the side bevel,
+    running into the seam, slides along the end segment across its full width, so that segment must be longer than it."""
     n = m.s(12, 8, 4, 2, 1)
     return [(x, L.seam_z(x)) for x in (-L.W / 2 + L.W * i / n for i in range(n + 1))]
 
 
 def on_seam(v, line):
-    """Вершина лежит на поверхности шва (ломаная line, протянутая по Y)?"""
+    """Is the vertex on the seam surface (the polyline "line", extruded along Y)?"""
     x, z = v.co.x, v.co.z
     for (xa, za), (xb, zb) in zip(line, line[1:]):
         if xa - 1e-7 <= x <= xb + 1e-7:
@@ -79,14 +80,14 @@ def on_seam(v, line):
 
 
 def shell(m, bm, line):
-    """Скругление части корпуса: L.BEV везде, кроме кромок по шву - там только узкая канавка, и
-    только на детальной (лоды берут её из запекания). Прежде шов скруглялся на те же 4.5 мм с
-    обеих сторон, и вдоль него шла глубокая V-образная щель. clamp выключен: с ним низ (волны
-    хвата) скруглялся на 2.9 мм, верх на 4.5, и части не сходились."""
+    """Bevel of a body part: L.BEV everywhere except the seam edges - there it's only a narrow
+    groove, and only on the detailed mesh (the LODs get it from baking). Previously the seam was
+    beveled at the same 4.5 mm on both sides, with a deep V-shaped gap running along it. clamp is
+    turned off: with it on, the bottom (grip waves) beveled at 2.9 mm, the top at 4.5, and the parts didn't meet."""
     def seam(e):
         return all(on_seam(v, line) for v in e.verts)
-    # LOD2 скругляется так же, как LOD1: одна фаска на его месте брала развёртку со скругления
-    # LOD1 и тянула на верхнюю кромку чужие острова (розовые полосы)
+    # LOD2 is beveled the same way as LOD1: a single bevel face in its place used to take its UV
+    # unwrap from the LOD1 bevel and drag foreign islands onto the top edge (pink stripes)
     sg = (5, 2, 2, 0)[min(m.q, 3)]
     if sg:
         K.bevel(bm, L.BEV, sg, angle=45.0, only=lambda e: not seam(e), clamp=False)
@@ -96,7 +97,7 @@ def shell(m, bm, line):
 
 
 def upper_outline(m, line):
-    """Оболочка спереди (x, z): низ - шов слева направо, правый бок, скруглённый верх, левый бок."""
+    """Shell outline, front view (x, z): bottom is the seam left to right, right side, rounded top, left side."""
     r, seg = L.R_TOP, m.s(8, 3, 2, 1, 0)
     if seg:
         top = (K.arc(L.W / 2 - r, L.H - r, r, 0.0, 0.5 * math.pi, seg)
@@ -107,20 +108,20 @@ def upper_outline(m, line):
 
 
 def wave(z):
-    """Волны хвата. У самого шва их нет: бок низа там вертикален, как у оболочки, и скругления
-    обеих частей упираются в шов одинаково - в лодах их вершины совпадают и сшиваются."""
+    """Grip waves. There are none right at the seam: the lower part's side is vertical there, like
+    the shell's, and the bevels of both parts meet the seam the same way - in the LODs their vertices coincide and get stitched together."""
     d = L.seam_z(L.W / 2) - z
     fade = min(1.0, max(0.0, (d - 0.003) / 0.004))
     return fade * sum(a * math.exp(-((z - zc) / 0.0052) ** 2) for zc, a in L.GRIP_WAVES)
 
 
 def lower_outline(line, seg, n_side):
-    """Контур нижней части (x, z): от левого конца шва вниз по боку с волнами хвата, скруглённый
-    низ, вверх по правому боку и обратно по шву."""
+    """Outline of the lower part (x, z): from the left end of the seam down the side with the grip
+    waves, the rounded bottom, up the right side, and back along the seam."""
     r = 0.0085
     zt = line[0][1]
-    # без шва и без z = r: там углы. Точка в 3 мм под швом - на каждом лоде: ребро бока от шва до
-    # неё вертикально (волн там нет), и скругление бока упирается в шов так же, как у оболочки
+    # without the seam and without z = r: those are corners. The point 3 mm below the seam is the
+    # same on every LOD: the side edge from the seam to it is vertical (no waves there), and the side bevel meets the seam the same way the shell's does
     zs = [zt - 0.003] + [z for z in (zt - (zt - r) * i / n_side for i in range(1, n_side)) if z < zt - 0.0035]
     left = [(-(L.W / 2 + wave(z)), z) for z in zs]
     right = [(L.W / 2 + wave(z), z) for z in reversed(zs)]
@@ -133,9 +134,9 @@ def lower_outline(line, seg, n_side):
 
 
 def body(m):
-    """Корпус: верхняя оболочка и прорезиненный низ, заподлицо, по общему шву. В игровых лодах
-    торцы по шву (они внутри) удаляются, и обе части срастаются в один меш: лицо разворачивается
-    одним островом, и стык верха и низа не режет текстуру."""
+    """Body: the upper shell and the rubberized bottom, flush along a shared seam. In the in-game
+    LODs the end faces along the seam (they're internal) are removed, and the two parts merge into
+    one mesh: the face unwraps as a single island, and the join between top and bottom doesn't cut the texture."""
     line = seam_line(m)
     up = shell(m, K.prism(upper_outline(m, line), L.YF, L.YB, "Y"), line)
     lo = shell(m, K.prism(lower_outline(line, m.s(6, 2, 1, 1, 0), m.s(40, 12, 6, 3, 2)), L.YF, L.YB, "Y"), line)
@@ -153,7 +154,7 @@ def body(m):
 
 
 # =============================================================================
-# Лицо
+# Face
 # =============================================================================
 def button_outline(x, z, rx, rz, n, grow=0.0):
     return [(x + (rx + grow) * math.cos(2 * math.pi * i / n), z + (rz + grow) * math.sin(2 * math.pi * i / n))
@@ -177,13 +178,13 @@ def bezel(m):
     yf = L.YF - b["proud"]
     bm = K.prism(bezel_outline(m.s(6, 2, 1, 0)), L.YF + 0.0006, yf, "Y")
     cuts = []
-    # вырезы - и на LOD2: там есть кнопки, а щиток без выреза под ЖКИ бился на крупные треугольники,
-    # и один из них брал развёртку с мелкого треугольника LOD1 у окна (тёмный клин на щитке)
+    # cutouts - on LOD2 too: it still has buttons, and a shield without the LCD cutout used to break
+    # into large triangles, one of which took its UV unwrap from a small LOD1 triangle at the window (a dark wedge on the shield)
     if m.upto(2):
         cuts.append(K.prism(K.rrect(w["w"], w["h"], w["r"], w["cx"], w["cz"], seg=m.s(4, 1)), yf - 0.001,
                             yf + w["depth"], "Y"))
-        # щиток огибает кнопки тёмным зазором, как у референса; между CALL, TALK и MON от него
-        # остаются зубцы вниз
+        # the shield wraps around the buttons with a dark gap, like the reference; between CALL,
+        # TALK and MON it leaves downward-pointing teeth
         for x, z, rx, rz, _mat, t in L.BUTTONS:
             cuts.append(K.prism(button_outline(x, z, rx, rz, button_seg(m, t), L.BEZEL_GAP), yf - 0.001,
                                 L.YF + 0.001, "Y"))
@@ -200,7 +201,7 @@ def buttons(m):
     front = L.YF - L.BEZEL["proud"] - 0.0011
     for x, z, rx, rz, mat, t in L.BUTTONS:
         f = front - (0.0010 if t == "TALK" else 0.0)
-        # у TALK скругление меньше: надпись во всю кнопку лежит на плоском, а не сползает на бок
+        # TALK has a smaller bevel: the label spans the whole button on a flat surface instead of sliding onto the side
         bev = min(rx, rz) * (0.28 if t == "TALK" else 0.42)
         m.add(K.prism(button_outline(x, z, rx, rz, button_seg(m, t)), L.YF + 0.0006, f, "Y"), mat, tag=K.T_KEYS,
               name="Button", bevel_=(bev, (3, 1, 0)), bevel_angle=50.0)
@@ -227,9 +228,9 @@ def speaker(m):
         cuts = [K.merge(*holes)]
     m.add(bm, "grip", name="Speaker", bevel_=(0.0012, (4, 1, 0)), cuts=cuts, bevel_angle=45.0)
     if m.hi:
-        # тёмная ткань динамика за сквозными отверстиями: без неё на дне дырки видно лицо корпуса,
-        # и отверстия читаются бугорками. Лист - внутри панели, перед лицом корпуса: за ним, как
-        # раньше, его закрывал сам корпус
+        # dark speaker cloth behind the through-holes: without it, the bottom of each hole would
+        # show the body's face, and the holes would read as bumps. The sheet sits inside the panel,
+        # in front of the body's face: behind it, as before, the body itself hides it
         cloth = K.prism(K.rrect(s["w"] - 0.004, s["h"] - 0.004, s["r"] - 0.002, s["cx"], s["cz"], seg=6),
                         L.YF - 0.0001, L.YF - 0.0003, "Y")
         m.add(cloth, "cloth", name="SpeakerCloth")
@@ -269,8 +270,8 @@ def back_door(m):
 
 
 def clip_offset(z):
-    """Отход пластины клипсы от корпуса: чистый сдвиг, пластина остаётся ПЛОСКОЙ. Изгиб делал
-    неплоскую n-угольную крышку, и её триангуляция складкой давала тёмный «ромб» посередине."""
+    """Offset of the clip plate from the body: a pure shift, the plate stays FLAT. Bending it made
+    a non-flat n-gon plate, and its fold triangulation gave a dark "diamond" in the middle."""
     return 0.0028 * (L.CLIP_TOP - z) / (L.CLIP_TOP - L.CLIP_BOT)
 
 
@@ -323,7 +324,7 @@ SPEC = dict(
     materials=materials,
     collision=collision,
     mass=0.15,
-    grip_shift=-0.04,           # сдвиг в хвате руки, м (+ к антенне), по просьбе пользователя 25.09
+    grip_shift=-0.04,           # shift in the hand grip, m (+ toward the antenna), at the owner's request 25.09
     body_top=L.H,
     previews=[
         ("front", 0, 4, 0.62, (0.0, 0.0, 0.080)),
