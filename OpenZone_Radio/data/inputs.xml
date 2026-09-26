@@ -14,8 +14,15 @@
 
 	Input names are global across every loaded mod, so they must be prefixed.
 
-	Default is K: unbound in vanilla DayZ, and far from the movement cluster,
-	which matters because this key is HELD while the player keeps running.
+	The frequency window defaults to K: unbound in vanilla DayZ, and far from
+	the movement cluster.
+
+	Push-to-talk defaults to T (the owner's decision of 2026-09-26; it was the
+	game's own voice key, CapsLock, before). T sits next to the movement
+	cluster, so a player keeps running while holding it; vanilla binds T only
+	as the base-building elevate modifier (UABuldElevateMod). With MirrorPtt
+	on, the mod adds T as a second binding of the voice key on the client, so
+	T = voice nearby + radio, and CapsLock stays voice nearby only.
 -->
 <modded_inputs>
 	<inputs>
@@ -33,7 +40,7 @@
 			<btn name="kK"/>
 		</input>
 		<input name="UAOZRadioPtt">
-			<btn name="kCapital"/>
+			<btn name="kT"/>
 		</input>
 	</preset>
 </modded_inputs>

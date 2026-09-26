@@ -50,6 +50,9 @@ engine offers script only `EnableVoN(player, bool)`, which is a permission gate 
 uses to silence the dead, and `SetVoiceLevel`, which is whisper/talk/shout. Transmitting
 is the native input `UAVoiceOverNet`, and nothing in script can press it.
 
+The radio key is **T** out of the box (since 2026-09-26; it was CapsLock, the game's own
+voice key, before), rebindable in Settings -> Controls -> OpenZone.
+
 Holding two keys at once is not the answer either. Give the game's voice input a
 **second binding** on the key you use for the radio, and one press does both:
 
