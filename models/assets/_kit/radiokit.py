@@ -40,7 +40,10 @@ MODEL_ROOT = os.path.join(REPO, "build", "model-root")
 VANILLA_DZ = r"D:\modding\PDrive\dz"
 IMAGE_TO_PAA = r"E:\SteamLibrary\steamapps\common\DayZ Tools\Bin\ImageToPAA\ImageToPAA.exe"
 PEN = r"dz\data\data\penetration"
-sys.path.insert(0, r"C:\Users\Crystal\.claude\skills\dayz-modding\scripts")
+# The MLOD writer (p3d.py) lives in the dayz-modding skill's scripts/ folder, which is
+# installed per user, so its path is resolved from the home directory; a p3d.py placed
+# next to this file (the _kit directory is on sys.path already) is found first.
+sys.path.append(os.path.join(os.path.expanduser("~"), ".claude", "skills", "dayz-modding", "scripts"))
 import p3d  # noqa: E402
 
 # face tags (the "part" layer): atlas priority and special sections
