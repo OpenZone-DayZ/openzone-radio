@@ -95,7 +95,8 @@ one invented brand, OZ-COM, with a model name printed on each case (Sheptun 250 
 500 m, Balabolka 1 km, Skrynia 2 km, Terran 5 km, Crystal 10 km), the radio's own face in
 the frequency window, and a button-press power gesture on the smallest set. They are part
 of `@OpenZone_Radio` itself, not a second pbo; the Blender sources and the pipeline that
-builds them are in [models/](models/README.md). The four range classes without a model
+builds them are in [models/](models/README.md). A one-picture tutorial for players and the
+legend of the frequency window are in [docs/tutorial/](docs/tutorial/) (English and Ukrainian). The four range classes without a model
 (50, 100, 200 and 750 m) are retired and kept as comments in `config.cpp`.
 
 **`@OpenZone_Radio` runs on OpenZone Core.** Until 2026-09-20 it stood alone on Community

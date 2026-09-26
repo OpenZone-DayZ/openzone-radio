@@ -2,7 +2,7 @@
 
     python tools/render_tutorial.py [out.png] [--lang en|uk]       (system Python with Pillow)
 
-Without --lang - English (docs/tutorial.en.png/.jpg); --lang uk writes docs/tutorial.uk.png/.jpg,
+Without --lang - English (../docs/tutorial/tutorial.en.png/.jpg); --lang uk writes tutorial.uk.png/.jpg there,
 the text comes from tutorial_i18n.py laid over the same markup.
 
 Assembled from the same things as the game and the window legend: faces - assets/<radio>/work/hud/face.png, keys -
@@ -27,7 +27,8 @@ import render_hud_legend as L  # noqa: E402
 ARGS = sys.argv[1:]
 LANG = ARGS[ARGS.index("--lang") + 1] if "--lang" in ARGS else "en"
 POS = [a for i, a in enumerate(ARGS) if not a.startswith("--") and (i == 0 or ARGS[i - 1] != "--lang")]
-OUT = POS[0] if POS else os.path.join(S.ROOT, "docs", "tutorial.%s.png" % LANG)
+DOCS = os.path.normpath(os.path.join(S.ROOT, "..", "docs", "tutorial"))   # the repository's docs, where players look
+OUT = POS[0] if POS else os.path.join(DOCS, "tutorial.%s.png" % LANG)
 BUILD = os.path.join(S.ROOT, "build", "tutorial")
 CHROME = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 WIDTH = 1920

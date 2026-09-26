@@ -2,7 +2,7 @@
 
     python tools/render_hud_legend.py [out.jpg] [--lang en|uk]      (system Python with Pillow)
 
-Without --lang - English (docs/screenshots/hud_legend.en.jpg); --lang uk writes hud_legend.uk.jpg.
+Without --lang - English (../docs/tutorial/hud_legend.en.jpg); --lang uk writes hud_legend.uk.jpg there.
 
 Draws from the same things the window is built from: the face - assets/<radio>/work/hud/face.png (written
 by render_hud_faces.py and make_hud_layouts.py), keys and screen - from hud_spec.py through the same Frame
@@ -22,7 +22,8 @@ import make_hud_layouts as M  # noqa: E402
 ARGS = sys.argv[1:]
 LANG = ARGS[ARGS.index("--lang") + 1] if "--lang" in ARGS else "en"
 POS = [a for i, a in enumerate(ARGS) if not a.startswith("--") and (i == 0 or ARGS[i - 1] != "--lang")]
-OUT = POS[0] if POS else os.path.join(S.ROOT, "docs", "screenshots", "hud_legend.%s.jpg" % LANG)
+DOCS = os.path.normpath(os.path.join(S.ROOT, "..", "docs", "tutorial"))   # the repository's docs, where players look
+OUT = POS[0] if POS else os.path.join(DOCS, "hud_legend.%s.jpg" % LANG)
 
 def _font_path(candidates, fallback, what):
     """The first font file that exists. The seven-segment face is the game's own gui/fonts/7segment

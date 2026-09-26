@@ -3,7 +3,7 @@
     blender -b -P tools/render_lineup.py -- [out.jpg]
 
 Takes the LOD1 object and preview materials from assets/<radio>/work/<radio>_game.blend (written by
-radiokit.run), lines the radios up by increasing range and renders them into docs/screenshots.
+radiokit.run), lines the radios up by increasing range and renders them into the repository's docs/tutorial.
 """
 import os
 import sys
@@ -17,7 +17,7 @@ import radiokit as K  # noqa: E402
 
 RADIOS = ["pmr_t388", "lxt", "uv5r", "uvs9", "xts", "prc152"]
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-OUT = argv[0] if argv else os.path.join(ROOT, "docs", "screenshots", "lineup.jpg")
+OUT = argv[0] if argv else os.path.normpath(os.path.join(ROOT, "..", "docs", "tutorial", "lineup.jpg"))
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 x = 0.0
