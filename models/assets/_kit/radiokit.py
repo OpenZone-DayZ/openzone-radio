@@ -37,8 +37,25 @@ PREFIX = MOD + "\\model"
 PBO_ROOT = os.path.join(REPO, MOD, "model")
 # Binarize root (build.project_root in the repository's dayz-mcp.toml): contains the OpenZone_Radio folder.
 MODEL_ROOT = os.path.join(REPO, "build", "model-root")
-VANILLA_DZ = r"D:\modding\PDrive\dz"
-IMAGE_TO_PAA = r"E:\SteamLibrary\steamapps\common\DayZ Tools\Bin\ImageToPAA\ImageToPAA.exe"
+# Two paths that differ per machine: the unpacked vanilla data (the P drive) that binarize's root
+# links to, and ImageToPAA from DayZ Tools. Environment variables OZ_VANILLA_DZ and OZ_IMAGE_TO_PAA
+# override them; otherwise the first existing candidate wins, the contributor's own paths included.
+def _first_existing(env, candidates):
+    override = os.environ.get(env)
+    if override:
+        return override
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return candidates[0]
+
+
+VANILLA_DZ = _first_existing("OZ_VANILLA_DZ", ["D:/modding/PDrive/dz", "E:/pdrive/dz", "P:/dz"])
+IMAGE_TO_PAA = _first_existing("OZ_IMAGE_TO_PAA", [
+    "E:/SteamLibrary/steamapps/common/DayZ Tools/Bin/ImageToPAA/ImageToPAA.exe",
+    "E:/Programs/Steam/steamapps/common/DayZ Tools/Bin/ImageToPAA/ImageToPAA.exe",
+    "C:/Program Files (x86)/Steam/steamapps/common/DayZ Tools/Bin/ImageToPAA/ImageToPAA.exe",
+])
 PEN = r"dz\data\data\penetration"
 # The MLOD writer (p3d.py) lives in the dayz-modding skill's scripts/ folder, which is
 # installed per user, so its path is resolved from the home directory; a p3d.py placed
