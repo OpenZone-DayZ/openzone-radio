@@ -23,8 +23,25 @@ ARGS = sys.argv[1:]
 LANG = ARGS[ARGS.index("--lang") + 1] if "--lang" in ARGS else "en"
 POS = [a for i, a in enumerate(ARGS) if not a.startswith("--") and (i == 0 or ARGS[i - 1] != "--lang")]
 OUT = POS[0] if POS else os.path.join(S.ROOT, "docs", "screenshots", "hud_legend.%s.jpg" % LANG)
-SEG_TTF = r"D:\modding\PDrive\gui\fonts\7segment.ttf"      # the same font as gui/fonts/7segment in the game
-TEXT_TTF = r"C:\Windows\Fonts\bahnschrift.ttf"
+
+def _font_path(candidates, fallback, what):
+    """The first font file that exists. The seven-segment face is the game's own gui/fonts/7segment
+    (a TrueType the contributor keeps on the P drive); without it the digits fall back to the text
+    font, and the picture says so on stderr."""
+    for c in candidates:
+        if c and os.path.exists(c):
+            return c
+    sys.stderr.write("render: no %s font (tried %s), using %s\n" % (what, [c for c in candidates if c], fallback))
+    return fallback
+
+
+WIN_FONTS = os.path.join(os.environ.get("WINDIR", "C:/Windows"), "Fonts")
+TEXT_TTF = _font_path([os.environ.get("OZ_TEXT_TTF"), os.path.join(WIN_FONTS, "bahnschrift.ttf")],
+                      os.path.join(WIN_FONTS, "arial.ttf"), "text")
+SEG_TTF = _font_path([os.environ.get("OZ_SEG_TTF"), os.path.join(S.ROOT, "build", "fonts", "7segment.ttf"),
+                      "D:/modding/PDrive/gui/fonts/7segment.ttf", "P:/gui/fonts/7segment.ttf"],
+                     TEXT_TTF, "seven-segment")
+
 K = 1.35                                                   # scale to window pixels at 1080p
 
 ROLE = {   # role -> (color, legend caption)
