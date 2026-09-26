@@ -588,8 +588,15 @@ modded class TransmitterBase
             EnableBroadcast(false);
             OZR_PublishAir(false);
             m_OZR_Latched = false;
+            // The closing pass walks every profiled set, so this line is
+            // written for a dead set on RELEASE too; say which edge it was.
             if (OZR_Log.IsDebug())
-                OZR_Log.Dbg("ptt gate: " + GetType() + " asked to speak while dead - refused");
+            {
+                string edge = "shut";
+                if (on)
+                    edge = "open";
+                OZR_Log.Dbg("ptt gate: " + GetType() + " is dead - asked to " + edge + ", air kept shut");
+            }
             return false;
         }
 

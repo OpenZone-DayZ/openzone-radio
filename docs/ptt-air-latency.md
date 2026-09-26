@@ -119,6 +119,13 @@ Asked by the owner before the change went in; read out of both binaries
 What static reading cannot close is closed on the stand by the debug line
 above: after a press the radios the server did not pick must print `shut`.
 
+Checked on the stand on 2026-09-26 (retail server and client, debug log on):
+hands empty, two powered sets in cargo, `PttFromCargo` on, so the client
+pre-opened both. Every press logged `OZ_Radio_2000m air OPEN` for the one the
+server picked and `other OZ_Radio_5000m is shut on the server` for the other;
+every release shut both. The same run also showed the default key T reaching
+the server after the profile's saved binding was removed.
+
 ## Other reasons a listener hears nothing
 
 Engine side:
