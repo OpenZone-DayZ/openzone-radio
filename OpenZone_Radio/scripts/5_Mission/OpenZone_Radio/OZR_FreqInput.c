@@ -63,12 +63,8 @@ class OZR_FreqInput
         // Клавіша бачить сирі натискання незалежно від фокуса UI. Поле з
         // фокусом означає «клавіатура зайнята текстом» -- сусідній мод спіймав
         // це тим, що літера в назві мітки закривала йому меню посеред слова.
-        Widget focused = GetFocus();
-        if (focused)
-        {
-            if (EditBoxWidget.Cast(focused) || MultilineEditBoxWidget.Cast(focused))
-                return;
-        }
+        if (OZR_Const.Typing())
+            return;
 
         Open();
     }
