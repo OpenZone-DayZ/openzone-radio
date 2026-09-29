@@ -422,8 +422,17 @@ class OZR_PageRadio : OZ_PdaPage
                 else
                     line = T("STR_OZR_CHIP_TOOK");
                 line += ": " + rep.Taken.ToString();
+
+                // «Решта не влізла» -- лише про запис на чип. Забирання з чипа
+                // -- усе або нічого (OZR_Page.Merge): те, що не влазить,
+                // приходить відмовою, а менше за «на чипі» при успіху беруть
+                // тільки тоді, коли частина імен на чипі непридатна.
                 if (rep.Taken < rep.Total)
-                    line += " / " + rep.Total.ToString() + " - " + T("STR_OZR_CHIP_PART");
+                {
+                    line += " / " + rep.Total.ToString();
+                    if (op == "chip_write")
+                        line += " - " + T("STR_OZR_CHIP_PART");
+                }
             }
             SetHintSticky("HintText", line);
 

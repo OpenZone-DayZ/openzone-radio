@@ -695,7 +695,13 @@ class OZ_PdaHandlerRadio : OZ_PageHandler
     }
 
     // Злиття в книжку приладу: те саме ім'я -- переписати (книжка -- не
-    // журнал), нове -- дописати, поки є місце. Що не влізло, лишилось на чипі.
+    // журнал), нове -- дописати.
+    //
+    // УСЕ АБО НІЧОГО (рішення власника 2026-09-29, те саме правило, що в
+    // гуртового імпорту міток і записок КПК). Раніше нові імена дописувались,
+    // поки було місце, а решта мовчки лишалась на чипі -- і гравець не знав,
+    // яких частот не отримав. Тепер злиття йде в локальну копію книжки, і
+    // якщо нові імена не влазять УСІ, книжка приладу не міняється зовсім.
     private string Merge(OZ_PDA_Base pda, OZR_FreqBook incoming, out bool ok, out string error)
     {
         ok = false;
@@ -739,16 +745,26 @@ class OZ_PdaHandlerRadio : OZ_PageHandler
                 continue;
             }
 
-            if (book.Items.Count() >= room)
-                continue;
-
             book.Items.Insert(copy);
             taken++;
         }
 
+        // Жодного придатного імені на чипі -- брати нічого.
         if (taken == 0)
         {
-            error = "STR_OZ_ERR_PDA_FULL";
+            error = "STR_OZR_ERR_CHIP_EMPTY";
+            return "";
+        }
+
+        // Одна ячейка на частоту; перезапис свого імені нової не коштує.
+        // Одна частота (chip_take) -- звичайне «пам'ять заповнена»; гуртом --
+        // окреме «нічого не забрано», бо саме це й сталось.
+        if (book.Items.Count() > room)
+        {
+            if (incoming.Items.Count() > 1)
+                error = "STR_OZR_ERR_CHIP_NO_ROOM";
+            else
+                error = "STR_OZ_ERR_PDA_FULL";
             return "";
         }
 
