@@ -1,4 +1,4 @@
-# Assemble the @Mod folders for publishing.
+﻿# Assemble the @Mod folders for publishing.
 #
 # The @Mod folders are build output and are not in git. mod_build writes
 # addons/ into them and signs it; this puts the rest in place -- the files a
@@ -93,4 +93,9 @@ if ($Check) {
     if ($problems -gt 0) { Write-Host "$problems mod(s) skipped, see above." -ForegroundColor Yellow }
 }
 
+# THE EXIT CODE IS THE ANSWER FOR AUTOMATION. It was 0 whatever happened, so a
+# -Check that found a stale mod.cpp or an unbuilt folder read as "all good" to
+# anything that ran it. Now: 0 -- every folder is ready; 1 -- something above
+# needs a hand. The text says what; the code says whether.
+if ($problems -gt 0) { exit 1 }
 exit 0
