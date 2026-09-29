@@ -38,20 +38,23 @@ class OZR_Module : CF_ModuleWorld
 
         // Стан гашетки гравця йде з ним. Без цього мапа росла б на кожного,
         // хто хоч раз натиснув клавішу, і не зменшувалась ніколи.
-        EnableInvokeDisconnect();
+        //
+        // ClientDisconnect, а не InvokeDisconnect: той CF кличе з базовими
+        // аргументами, і прибирання на ньому не спрацювало жодного разу --
+        // мапа росла саме так, як не мала б.
+        EnableClientDisconnect();
     }
 
-    override void OnInvokeDisconnect(Class sender, CF_EventArgs args)
+    override void OnClientDisconnect(Class sender, CF_EventArgs args)
     {
-        super.OnInvokeDisconnect(sender, args);
+        super.OnClientDisconnect(sender, args);
 
         if (!GetGame().IsServer())
             return;
 
-        // На дисконекті особи може вже не бути, тому CF окремо несе UID.
-        CF_EventPlayerDisconnectedArgs dArgs = CF_EventPlayerDisconnectedArgs.Cast(args);
-        if (dArgs)
-            OZR_Throttle.Forget(dArgs.UID);
+        // UID у аргументах виходу -- хеш, а не Steam64, яким ключиться
+        // гашетка; особи на цю мить уже може не бути. Steam64 називає ядро.
+        OZR_Throttle.Forget(OZ_Players.PlainOfLeaving(args));
     }
 
     // Таймери дебаг-режиму лагів; див. OZR_Meter і OZR_LoadTest. Заводяться
