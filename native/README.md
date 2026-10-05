@@ -175,6 +175,33 @@ same `hid.dll` from the same directory and added no line to the log, leaving its
 own table vanilla. That is the shipping configuration — patched server, stock
 client — and the client connected and played normally in it.
 
+## Linux: the Windows server under Wine
+
+Measured 2026-10-05 with Wine 9.0 on Ubuntu 24.04 (WSL2): `DayZServer_x64.exe` (build of
+2026-08-13), `hid.dll` and `oz_frequencies.json` in one folder, started with
+`wine DayZServer_x64.exe -profiles=prof`. The proxy is loaded and patches exactly as on Windows:
+
+```
+found: lookup at +0x502D10, table at +0xE55570, table is the known vanilla eight
+patched: redirected 12 bytes
+channels: 400, from 136.000 MHz in steps of 0.0500 MHz (index 0 = 136.000, index 399 = 155.950)
+```
+
+| `WINEDLLOVERRIDES` | what Wine loads | result |
+|---|---|---|
+| not set | the proxy beside the executable (native), then `C:\Windows\System32\hid.dll` (builtin) for the forwards | patched |
+| `hid=n,b` | the same | patched |
+| `hid=n` | the proxy, but the forwards to System32 are refused: `module not found for forward` | patched, every HID export unresolved; do not use |
+
+Wine 9.0 prefers the copy beside the executable on its own, so no override is needed there.
+Setting `WINEDLLOVERRIDES="hid=n,b"` anyway costs nothing and removes the dependence on that
+default, which other Wine or Proton builds need not share. Never `hid=n`: the proxy forwards
+every export to the System32 library, and in a Wine prefix that library is Wine's builtin one.
+
+What this run does not cover: Proton itself, and a full boot with mods (the folder held no game
+data, so the server never got to its config). The native Linux server binary cannot load the
+proxy at all: it is a Windows DLL patching a Windows image.
+
 ## Note on a shared game directory
 
 The proxy is deployed beside the game executable, which on this machine is the
