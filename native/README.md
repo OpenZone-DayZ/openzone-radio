@@ -267,6 +267,9 @@ idle and stopped on SIGINT as it does without it. The mod's profiler, two millio
 each: `SetFrequencyByIndex` costs about 82 ns with the library against 52 ns without, so the
 stub adds some 30 ns to a tune; `GetTunedFrequency` is 32 ns either way.
 
+The same server also boots the radio stand's full set with the library loaded and no script
+errors: CF, VPP Admin Tools, the core, factions, the PDA and the glue pbos, twelve mod folders.
+
 What this does not cover is voice between two players on a Linux server: that needs two
 people.
 
