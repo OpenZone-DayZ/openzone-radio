@@ -175,7 +175,7 @@ same `hid.dll` from the same directory and added no line to the log, leaving its
 own table vanilla. That is the shipping configuration — patched server, stock
 client — and the client connected and played normally in it.
 
-## Linux: the Windows server under Wine
+## Linux: the Windows server under Wine or Proton
 
 Measured 2026-10-05 with Wine 9.0 on Ubuntu 24.04 (WSL2): `DayZServer_x64.exe` (build of
 2026-08-13), `hid.dll` and `oz_frequencies.json` in one folder, started with
@@ -198,9 +198,15 @@ Setting `WINEDLLOVERRIDES="hid=n,b"` anyway costs nothing and removes the depend
 default, which other Wine or Proton builds need not share. Never `hid=n`: the proxy forwards
 every export to the System32 library, and in a Wine prefix that library is Wine's builtin one.
 
-What this run does not cover: Proton itself, and a full boot with mods (the folder held no game
-data, so the server never got to its config). The native Linux server binary cannot load the
-proxy at all: it is a Windows DLL patching a Windows image.
+The same three runs through Proton's own launcher, outside Steam (GE-Proton11-7, Wine 11.0
+Staging; `python3 proton run DayZServer_x64.exe -profiles=prof` with `STEAM_COMPAT_DATA_PATH`
+and `STEAM_COMPAT_CLIENT_INSTALL_PATH` set to empty folders) gave the same three answers:
+patched with no override, patched with `hid=n,b`, and with `hid=n` the forwards fail and
+Proton's own `lsteamclient.dll` loses its `XINPUT1_3.dll`, which needs the builtin `hid.dll`.
+
+What these runs do not cover: a full boot with mods (the folder held no game data, so the
+server never got to its config). The native Linux server binary cannot load the proxy at all:
+it is a Windows DLL patching a Windows image.
 
 ## Note on a shared game directory
 
