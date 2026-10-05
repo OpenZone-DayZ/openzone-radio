@@ -2,7 +2,9 @@
 
 A server-side native mod that raises DayZ's eight radio channels to a number set
 in JSON. Loads as a proxy `hid.dll` beside the game executable and replaces the
-one engine function that turns a tuned index into a frequency.
+one engine function that turns a tuned index into a frequency. For the native
+Linux server the same replacement is a shared object, `oz_frequencies.so`,
+loaded with `LD_PRELOAD`; see "The native Linux server" below.
 
 Background: [engine-frequency-table](../docs/engine-frequency-table.md) — what was
 measured in the binaries, and why the design looks like this.
@@ -125,6 +127,11 @@ src/forwards.h    47 pragmas forwarding hid.dll's exports to the real one
 src/patch.h/.cpp  finding the lookup by its code shape, and redirecting it
 src/dllmain.cpp   the -server gate, the JSON, the log, the replacement function
 build.ps1         toolchain discovery, build, deploy
+
+linux/oz_frequencies.c    the whole Linux library: gate, JSON, log, finding, redirect
+linux/build.sh            cc -shared, and `build.sh test` to run the checks
+linux/test/fake_server.c  a stand-in for the engine, one variant per code shape
+linux/test/run.sh         the library against the stand-in
 ```
 
 `forwards.h` is generated from the real `hid.dll`'s export table rather than
@@ -205,8 +212,55 @@ patched with no override, patched with `hid=n,b`, and with `hid=n` the forwards 
 Proton's own `lsteamclient.dll` loses its `XINPUT1_3.dll`, which needs the builtin `hid.dll`.
 
 What these runs do not cover: a full boot with mods (the folder held no game data, so the
-server never got to its config). The native Linux server binary cannot load the proxy at all:
-it is a Windows DLL patching a Windows image.
+server never got to its config). The native Linux server binary cannot load the proxy at all,
+it is a Windows DLL patching a Windows image; that server has a library of its own, next.
+
+## The native Linux server
+
+`DayZServer`, the ELF build of the server, imports no library a proxy could stand in for,
+so the replacement is delivered the way Linux offers one:
+
+```
+LD_PRELOAD=/home/dayz/server/oz_frequencies.so ./DayZServer -config=serverDZ.cfg -port=2302 -profiles=profiles
+```
+
+or `Environment=LD_PRELOAD=/home/dayz/server/oz_frequencies.so` in the systemd unit. Give
+the full path. `oz_frequencies.json` and the log sit beside the library, and the grid in
+`<profiles>/OpenZone/OZ_Radio_Frequencies.json` wins over that file, exactly as for the DLL.
+The library acts only in a process whose executable is named `DayZServer`; anything else
+started with the same environment (the launching shell, steamcmd) is left alone and silent.
+
+**Status: built and tested against a stand-in, not yet run against the real Linux server.**
+Nobody here has that binary, and it comes from a different compiler than the Windows one, so
+its code shape is unknown. The library is written for that:
+
+- it finds the lookup through the table, not through fixed bytes: the eight vanilla
+  frequencies as data, then the one instruction that addresses them with a mask by 7 before
+  it and a return after it. Position-independent or fixed-base, aligned or not, with or
+  without an `ENDBR64` in front, index in `esi` or in `edi`;
+- every reference to the table is written to the log with the bytes around it, so a refusal
+  on a real server is a report: send `oz_frequencies.log` and the shape can be added;
+- if the compiler inlined the lookup into its callers there is no function to redirect, and
+  it says `NOT PATCHED` and changes nothing.
+
+```
+found: lookup at +0x11C4 (16 bytes to its return, index in esi, the second argument), table at +0x2020, table is the known vanilla eight
+patched: redirected 5 bytes through a relay at 0x600fbee80000
+channels: 400, from 136.000 MHz in steps of 0.0500 MHz (index 0 = 136.000, index 399 = 155.950)
+```
+
+**Why five bytes and a relay, where the DLL writes twelve.** A compiler that sees a
+three-instruction leaf knows which registers it touches and may keep its own values in all
+the others across the call (GCC does at `-O2`, `-fipa-ra`). The DLL's `mov rax, imm64; jmp
+rax` into a C function clobbers `rax` and whatever else the calling convention allows;
+tried here first, it turned every frequency of the stand-in into `0.000` without crashing
+anything. So the lookup gets a five-byte relative jump, which touches no register, to a
+relay page mapped within its reach; the relay jumps to an assembly stub that saves the flags,
+the caller-saved general registers and `xmm1`..`xmm15`, calls the C function and restores
+them. Only `xmm0`, the result, comes back changed, and the test checks all 24 registers.
+
+`sh native/linux/build.sh test` builds the library and runs it against
+`linux/test/fake_server.c` compiled seven ways. The result needs glibc 2.14 or newer.
 
 ## Note on a shared game directory
 

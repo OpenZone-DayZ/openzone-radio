@@ -1,1 +1,5 @@
 *.csv -text
+
+# Shell scripts run on Linux, where a CR at the end of a line breaks them.
+*.sh text eol=lf
+native/linux/** text eol=lf

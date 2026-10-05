@@ -70,3 +70,30 @@ jobs:
             gh release create $tag --title "OpenZone frequency proxy $ver" --notes $notes
           }
           gh release upload $tag $zip --clobber
+
+  # The same release gets the library for the native Linux server. It waits for
+  # the Windows job because that one creates the release; two jobs creating it
+  # at once is a race one of them loses.
+  linux:
+    needs: windows
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      # build.sh test runs the library against the stand-in server compiled
+      # seven ways; a release whose library fails that is not uploaded.
+      - name: build and test the library
+        run: sh native/linux/build.sh test
+
+      - name: assemble and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ github.ref_name }}"
+          ver="${tag#proxy-}"
+          name="openzone-frequency-proxy-$ver-linux64"
+          mkdir -p "dist/$name"
+          cp native/build/oz_frequencies.so native/oz_frequencies.json native/README.md LICENSE NOTICE "dist/$name/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          sha256sum "dist/$name.tar.gz"
+          gh release upload "$tag" "dist/$name.tar.gz" --clobber
