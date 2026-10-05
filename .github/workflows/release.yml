@@ -17,7 +17,20 @@ permissions:
   contents: write
 
 jobs:
+  # The Linux library is built and tested first, and nothing is published
+  # unless it passes. The Windows job below is the one that creates the
+  # release, so a library that fails on the runner has to stop the run before
+  # there is a release for it to be missing from.
+  linux-test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: build and test the library
+        run: sh native/linux/build.sh test
+
   windows:
+    needs: linux-test
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -64,7 +77,7 @@ jobs:
 
           ``README.md`` inside the archive has the rest, including what is patched and why.
 
-          SHA256 of the archive: ``$sha``
+          SHA256 of the Windows archive: ``$sha``
           "@
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
@@ -82,8 +95,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # build.sh test runs the library against the stand-in server compiled
-      # seven ways; a release whose library fails that is not uploaded.
+      # Built again here, from the same commit, and tested again: what is
+      # uploaded is what this job has just seen pass.
       - name: build and test the library
         run: sh native/linux/build.sh test
 
