@@ -60,6 +60,8 @@ jobs:
 
           **Where it must not go.** Not into a directory you play retail DayZ from. It patches nothing there thanks to the gate above, but BattlEye blocks an unsigned DLL and says so in the launcher.
 
+          **Linux.** The ``-linux64.tar.gz`` archive of this release holds ``oz_frequencies.so`` for the native Linux server, built and tested by the same workflow on ubuntu-22.04. Start the server with ``LD_PRELOAD=/full/path/oz_frequencies.so`` in front of its command line; the Windows archive is not needed there.
+
           ``README.md`` inside the archive has the rest, including what is patched and why.
 
           SHA256 of the archive: ``$sha``

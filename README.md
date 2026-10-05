@@ -138,6 +138,17 @@ cd native
 .\build.ps1 -Deploy -TargetDir 'C:\path\to\DayZServer'
 ```
 
+**On a native Linux server** the same replacement is `oz_frequencies.so`, loaded with
+`LD_PRELOAD`: the Linux build of the server has no `hid.dll` to stand in for. The grid
+file, the log and the server-only rule are the same. Measured on the real `DayZServer`
+1.29: 400 channels with the library, the vanilla eight without it. The details are in
+"The native Linux server" of [`native/README.md`](native/README.md).
+
+```sh
+sh native/linux/build.sh
+LD_PRELOAD=/full/path/to/oz_frequencies.so ./DayZServer -config=serverDZ.cfg -profiles=profiles
+```
+
 Then set the band. The file the patch prefers is
 `<profiles>\OpenZone\OZ_Radio_Frequencies.json`, which the mod WRITES ITSELF by
 deriving it from the radio profiles — the lowest bound of any profile, the highest,

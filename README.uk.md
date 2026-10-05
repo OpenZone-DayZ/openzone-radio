@@ -135,6 +135,17 @@ cd native
 .\build.ps1 -Deploy -TargetDir 'C:\шлях\до\DayZServer'
 ```
 
+**На рідному Linux-сервері** та сама заміна — це `oz_frequencies.so`, яку вантажить
+`LD_PRELOAD`: у Linux-збірки сервера немає `hid.dll`, яку можна було б підмінити. Файл
+сітки, лог і правило «тільки сервер» ті самі. Зміряно на справжньому `DayZServer` 1.29:
+400 каналів із бібліотекою, ванільні вісім без неї. Подробиці — у розділі
+«The native Linux server» у [`native/README.md`](native/README.md).
+
+```sh
+sh native/linux/build.sh
+LD_PRELOAD=/повний/шлях/до/oz_frequencies.so ./DayZServer -config=serverDZ.cfg -profiles=profiles
+```
+
 Далі ефір. Файл, якому патч віддає перевагу, — це
 `<profiles>\OpenZone\OZ_Radio_Frequencies.json`, і його ПИШЕ САМ МОД, виводячи з
 профілів рацій: найнижча межа з усіх, найвища й найбільший спільний дільник усіх

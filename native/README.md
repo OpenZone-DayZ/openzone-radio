@@ -229,25 +229,74 @@ the full path. `oz_frequencies.json` and the log sit beside the library, and the
 `<profiles>/OpenZone/OZ_Radio_Frequencies.json` wins over that file, exactly as for the DLL.
 The library acts only in a process whose executable is named `DayZServer`; anything else
 started with the same environment (the launching shell, steamcmd) is left alone and silent.
+Where the log file cannot be written, because the library sits in a directory the server's
+user may not write to, its lines go to the server's standard error instead, after one line
+saying why.
 
-**Status: built and tested against a stand-in, not yet run against the real Linux server.**
-Nobody here has that binary, and it comes from a different compiler than the Windows one, so
-its code shape is unknown. The library is written for that:
+**Status: works on the real server.** Measured 2026-10-05 against `DayZServer` 1.29.163709
+(Steam depot 223352) on Ubuntu 24.04 under WSL2, with the game data of the Windows server of
+the same build, `BattlEye = 1`, `verifySignatures = 2` and
+`-mod=@CF;@OpenZone_Core;@OpenZone_Radio`. The library's log:
 
-- it finds the lookup through the table, not through fixed bytes: the eight vanilla
-  frequencies as data, then the one instruction that addresses them with a mask by 7 before
-  it and a return after it. Position-independent or fixed-base, aligned or not, with or
-  without an `ENDBR64` in front, index in `esi` or in `edi`;
+```
+grid read from beside the library: /root/dzfull/oz_frequencies.json
+found: lookup at +0x15BA5F0 (16 bytes to its return, index in esi, the second argument), table at +0x1FCAD00, table is the known vanilla eight
+patched: redirected 5 bytes through a relay at 0x24b0000
+channels: 400, from 136.000 MHz in steps of 0.0500 MHz (index 0 = 136.000, index 399 = 155.950)
+```
+
+and, in the server's script log, the mod's own probe, which drives `SetFrequencyByIndex` /
+`GetTunedFrequency` and reads back what the engine returned:
+
+```
+[OpenZone/Radio] band table measured: 400 frequencies  136 ..  155.95
+[OpenZone/Radio] ether derived from profiles: 136.000 to 155.950 MHz, step 0.0500, 400 divisions (in effect)
+[OpenZone/Radio] radio loaded: bands=400 profiles=7
+```
+
+| start | where the grid came from | what the mod measured |
+|---|---|---|
+| with the library, first boot | the file beside the library | 400 frequencies, 136 .. 155.95 |
+| without the library | | 8 frequencies, 87.8 .. 102.5, and the mod's warning that this is what an unpatched server looks like |
+| with the library, second boot | the profile's copy, which the mod wrote on the first boot | 400 frequencies |
+| with the library, the profile's copy edited by hand to 140.0 / 0.025 / 800 | the profile's copy | 800 frequencies, 140 .. 159.975 |
+| with the library, the boot after that | the profile's copy, which the mod wrote again from its radio profiles | 400 frequencies again |
+
+BattlEye initialised and the server registered with Steam with the library loaded; it sat
+idle and stopped on SIGINT as it does without it. The mod's profiler, two million calls
+each: `SetFrequencyByIndex` costs about 82 ns with the library against 52 ns without, so the
+stub adds some 30 ns to a tune; `GetTunedFrequency` is 32 ns either way.
+
+What this does not cover is voice between two players on a Linux server: that needs two
+people.
+
+**To check another build of the server in a few seconds**, put the three files of the
+Linux depot, the library and `oz_frequencies.json` in an empty folder and start it with
+`OZ_FREQUENCIES_SELFTEST=1` as well: right after patching the library calls the engine's
+lookup itself and logs what it answers. (The server then dies for want of game data, which
+it does without the library too.)
+
+```
+self-test: the engine's lookup now answers index 0 = 136.000, 1 = 136.050, 9 = 136.450, 399 = 155.950, 400 = 136.000 (wraps), -1 = 155.950 (wraps)
+```
+
+**How the lookup is found.** The library was written before anyone here had the Linux
+binary, which comes from a different compiler than the Windows one, so it does not match
+fixed bytes:
+
+- it finds the lookup through the table: the eight vanilla frequencies as data, then the
+  one instruction that addresses them with a mask by 7 beside it and a return after it.
+  Position-independent or fixed-base, aligned or not, with or without an `ENDBR64` in
+  front, index in `esi` or in `edi`;
 - every reference to the table is written to the log with the bytes around it, so a refusal
-  on a real server is a report: send `oz_frequencies.log` and the shape can be added;
+  on a future build is a report: send `oz_frequencies.log` and the shape can be added;
 - if the compiler inlined the lookup into its callers there is no function to redirect, and
   it says `NOT PATCHED` and changes nothing.
 
-```
-found: lookup at +0x11C4 (16 bytes to its return, index in esi, the second argument), table at +0x2020, table is the known vanilla eight
-patched: redirected 5 bytes through a relay at 0x600fbee80000
-channels: 400, from 136.000 MHz in steps of 0.0500 MHz (index 0 = 136.000, index 399 = 155.950)
-```
+The real server (GCC 7.5, a fixed-base executable at `0x400000`) has it as
+`lea rax, [rip + table]; and esi, 7; movss xmm0, [rax + rsi*4]; ret`, the mask after the
+table's address where the Windows build has it before, and was found and patched on first
+contact with nothing changed for it.
 
 **Why five bytes and a relay, where the DLL writes twelve.** A compiler that sees a
 three-instruction leaf knows which registers it touches and may keep its own values in all
@@ -258,6 +307,8 @@ anything. So the lookup gets a five-byte relative jump, which touches no registe
 relay page mapped within its reach; the relay jumps to an assembly stub that saves the flags,
 the caller-saved general registers and `xmm1`..`xmm15`, calls the C function and restores
 them. Only `xmm0`, the result, comes back changed, and the test checks all 24 registers.
+The relay page is taken below the end of the executable, where the heap never grows: on the
+real server it lands in the gap between the code and the data segment.
 
 `sh native/linux/build.sh test` builds the library and runs it against
 `linux/test/fake_server.c` compiled seven ways. The result needs glibc 2.14 or newer.

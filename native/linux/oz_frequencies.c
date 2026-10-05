@@ -22,6 +22,17 @@
 // find, it writes the bytes it looked at into the log, so that a refusal on a
 // real server is a report that can be acted on, not a shrug.
 //
+// What the real server turned out to carry (build 1.29.163709, GCC 7.5, a
+// fixed-base executable at 0x400000; measured 2026-10-05), at +0x15BA5F0:
+//
+//     48 8D 05 <rel32>     lea   rax, [rip + table]
+//     83 E6 07             and   esi, 7
+//     F3 0F 10 04 B0       movss xmm0, [rax + rsi*4]
+//     C3                   ret
+//
+// -- the mask AFTER the table's address is taken, the reverse of the Windows
+// build. Found and patched on first contact, with nothing here changed for it.
+//
 // HOW IT IS REPLACED, and why not with the DLL's twelve bytes either. A
 // compiler that sees a three-instruction leaf knows exactly which registers it
 // touches, and may keep its own values in all the others across the call (GCC
@@ -36,7 +47,8 @@
 //
 // Everything else is the DLL's behaviour on purpose: the same grid file, looked
 // for in the server's profile first and beside this library second; the same
-// defaults; the same log lines, in oz_frequencies.log beside this library.
+// defaults; the same log lines, in oz_frequencies.log beside this library --
+// or on the server's standard error, when that file cannot be written.
 
 #define _GNU_SOURCE
 #include <errno.h>
@@ -86,35 +98,59 @@ static const float kVanilla[8] = {
 // Written beside the library. A mod that quietly does nothing is the worst
 // outcome here -- every path through this file ends in a line saying what
 // happened.
+//
+// A library installed where the server's user may not write (/usr/local/lib,
+// a read-only mount) has no log file to write to. Its lines then go to the
+// server's standard error, which is the console, the journal or the panel --
+// the next place an admin looks -- after one line saying why they are there.
 static void Log(const char* fmt, ...)
 {
-    char path[PATH_MAX + 32];
-    snprintf(path, sizeof(path), "%s/oz_frequencies.log", g_dir[0] ? g_dir : ".");
-
-    int fd = open(path, O_WRONLY | O_APPEND | O_CREAT, 0644);
-    if (fd < 0)
-        return;
+    static const char tag[] = "oz_frequencies: ";
+    char buf[sizeof(tag) + 2048];
+    char* line = buf + sizeof(tag) - 1;
+    const size_t cap = sizeof(buf) - (sizeof(tag) - 1);
+    memcpy(buf, tag, sizeof(tag) - 1);
 
     time_t now = time(NULL);
     struct tm tm;
     localtime_r(&now, &tm);
 
-    char line[2048];
-    int n = snprintf(line, sizeof(line), "%02d:%02d:%02d  ", tm.tm_hour, tm.tm_min, tm.tm_sec);
+    int n = snprintf(line, cap, "%02d:%02d:%02d  ", tm.tm_hour, tm.tm_min, tm.tm_sec);
 
     va_list args;
     va_start(args, fmt);
-    int m = vsnprintf(line + n, sizeof(line) - (size_t)n - 1, fmt, args);
+    int m = vsnprintf(line + n, cap - (size_t)n - 1, fmt, args);
     va_end(args);
 
     if (m < 0)
         m = 0;
     n += m;
-    if (n > (int)sizeof(line) - 2)
-        n = (int)sizeof(line) - 2;
+    if (n > (int)cap - 2)
+        n = (int)cap - 2;
     line[n++] = '\n';
 
-    ssize_t ignored = write(fd, line, (size_t)n);
+    char path[PATH_MAX + 32];
+    snprintf(path, sizeof(path), "%s/oz_frequencies.log", g_dir[0] ? g_dir : ".");
+
+    ssize_t ignored;
+    int fd = open(path, O_WRONLY | O_APPEND | O_CREAT, 0644);
+    if (fd < 0)
+    {
+        static int said = 0;
+        if (!said)
+        {
+            said = 1;
+            char note[PATH_MAX + 160];
+            int k = snprintf(note, sizeof(note), "%scannot write %s (%s); its lines follow here\n",
+                             tag, path, strerror(errno));
+            ignored = write(STDERR_FILENO, note, (size_t)k);
+        }
+        ignored = write(STDERR_FILENO, buf, sizeof(tag) - 1 + (size_t)n);
+        (void)ignored;
+        return;
+    }
+
+    ignored = write(fd, line, (size_t)n);
     (void)ignored;
     close(fd);
 }
@@ -402,6 +438,7 @@ struct Seg
 static struct Seg     g_segs[MAX_SEGS];
 static int            g_nsegs = 0;
 static unsigned char* g_base  = NULL;   // load bias of the main executable
+static uintptr_t      g_imageEnd = 0;   // one past its highest segment, bss included
 
 // dl_iterate_phdr reports the main program first, with an empty name. The same
 // walk finds this library's own path -- the object one of whose segments holds
@@ -428,6 +465,8 @@ static int OnObject(struct dl_phdr_info* info, size_t size, void* data)
             g_segs[g_nsegs].exec  = (ph->p_flags & PF_X) != 0;
             g_nsegs++;
         }
+        if (*index == 0 && start + ph->p_memsz > g_imageEnd)
+            g_imageEnd = start + ph->p_memsz;
         if (mine >= start && mine < start + ph->p_memsz && info->dlpi_name && info->dlpi_name[0])
         {
             char resolved[PATH_MAX];
@@ -700,7 +739,12 @@ static int FindLookup(struct Found* out, char* why, size_t whyLen)
 // 64 KiB steps outward from the site, below and above; MAP_FIXED_NOREPLACE asks
 // for exactly that address or nothing, and a kernel too old to know the flag
 // treats the address as a hint, which the comparison below catches.
-static unsigned char* MapNear(const unsigned char* site, size_t page)
+//
+// `ceiling`, when not zero, rules out every page that would end above it. The
+// heap grows upward from the end of the executable, and a page planted there
+// would stand in its way; below that end -- under the image, or in a gap
+// between its segments, where the real server's relay lands -- nothing grows.
+static unsigned char* MapNear(const unsigned char* site, size_t page, uintptr_t ceiling)
 {
     const uintptr_t reach = 0x70000000u;
     const uintptr_t step = 0x10000u;
@@ -713,6 +757,8 @@ static unsigned char* MapNear(const unsigned char* site, size_t page)
             if (!up && origin < delta + step)
                 continue;
             uintptr_t want = up ? origin + delta : origin - delta;
+            if (ceiling && want + page > ceiling)
+                continue;
             void* got = mmap((void*)want, page, PROT_READ | PROT_WRITE,
                              MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
             if (got == MAP_FAILED)
@@ -729,7 +775,10 @@ static int Redirect(unsigned char* site, void* stub, char* why, size_t whyLen)
 {
     const size_t page = (size_t)sysconf(_SC_PAGESIZE);
 
-    unsigned char* relay = MapNear(site, page);
+    // Out of the heap's way first; anywhere in reach only if that finds nothing.
+    unsigned char* relay = MapNear(site, page, g_imageEnd);
+    if (!relay)
+        relay = MapNear(site, page, 0);
     if (!relay)
     {
         snprintf(why, whyLen, "no free page within 2 GiB of the lookup for the relay; nothing was patched");
@@ -772,14 +821,26 @@ static int Redirect(unsigned char* site, void* stub, char* why, size_t whyLen)
     if (mprotect((void*)from, to - from, PROT_READ | PROT_EXEC) != 0)
     {
         snprintf(why, whyLen,
-                 "mprotect(read+exec) failed AFTER the bytes were written: %s -- the server "
-                 "will crash on its first frequency lookup", strerror(errno));
+                 "mprotect(read+exec) failed AFTER the bytes were written: %s -- that page of "
+                 "the server's code is left without execute permission and the server will "
+                 "crash; start it without this library (a policy that forbids changed code "
+                 "pages, SELinux's execmod for one, does this)", strerror(errno));
         return 0;
     }
     __builtin___clear_cache((char*)site, (char*)site + JUMP_LEN);
 
     snprintf(why, whyLen, "redirected %d bytes through a relay at %p", JUMP_LEN, (void*)relay);
     return 1;
+}
+
+// The engine's lookup, called the way the engine calls it. Only meaningful
+// after the redirect: from the site on, the original bytes are no longer a
+// function of their own.
+static float CallLookup(const struct Found* found, int index)
+{
+    if (found->argIndex == 2)
+        return ((float (*)(void*, int))found->site)(NULL, index);
+    return ((float (*)(int))found->site)(index);
 }
 
 // ------------------------------------------------------------------- start-up
@@ -810,8 +871,9 @@ static void Start(void)
         {
             Log("----");
             Log("NOT PATCHED: loaded into \"%s\", which is not DayZServer, though its command "
-                "line looks like a server's. If this IS the server, name the executable "
-                "DayZServer.", g_exe);
+                "line carries a server's arguments. A launcher that passes them along (timeout, "
+                "nohup) looks like this and can be ignored; if this IS the server under another "
+                "name, name the executable DayZServer.", g_exe);
         }
         return;
     }
@@ -841,4 +903,17 @@ static void Start(void)
         g_config.count, g_config.base, g_config.step,
         g_config.base, g_config.count - 1,
         g_config.base + (g_config.count - 1) * g_config.step);
+
+    // OZ_FREQUENCIES_SELFTEST=1: call the engine's own lookup, through the jump
+    // just written, and say what it answers. This is the proof on a real server
+    // that does not need the game to boot: the path engine -> relay -> stub -> C
+    // either returns the grid or it does not.
+    if (getenv("OZ_FREQUENCIES_SELFTEST"))
+    {
+        const int n = g_config.count;
+        Log("self-test: the engine's lookup now answers index 0 = %.3f, 1 = %.3f, 9 = %.3f, "
+            "%d = %.3f, %d = %.3f (wraps), -1 = %.3f (wraps)",
+            CallLookup(&found, 0), CallLookup(&found, 1), CallLookup(&found, 9),
+            n - 1, CallLookup(&found, n - 1), n, CallLookup(&found, n), CallLookup(&found, -1));
+    }
 }

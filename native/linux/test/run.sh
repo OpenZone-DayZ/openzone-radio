@@ -9,6 +9,10 @@
 #   inlined        there is no function to redirect: the library must change nothing
 #                  and must say NOT PATCHED in its log, with the bytes it looked at
 #   profile        the grid in the server's profile wins over the one beside the library
+#   self-test      with OZ_FREQUENCIES_SELFTEST set the library calls the patched lookup
+#                  itself and logs the answers -- the check that works on a real server
+#   no log file    where the log cannot be written the lookup is patched all the same,
+#                  and the lines go to standard error
 #   stranger       a process that is not DayZServer is left alone and leaves no log
 #
 # Run from anywhere: sh native/linux/test/run.sh (after native/linux/build.sh).
@@ -102,6 +106,24 @@ run_patched "$dir" patched.txt
 check "profile" "index 3 is 401.500 with the profile's grid" grep -q "^3 401.500$" "$dir/patched.txt"
 check "profile" "log says the grid came from the profile" grep -q "grid read from the profile" "$dir/lib/oz_frequencies.log"
 sed 's/^/    | /' "$dir/lib/oz_frequencies.log" | cut -c1-240
+
+echo "self-test:"
+dir="$WORK/selftest"
+build "$dir" member "-O2 -no-pie -fno-pic"
+(cd "$dir" && OZ_FREQUENCIES_SELFTEST=1 LD_PRELOAD="$dir/lib/oz_frequencies.so" ./DayZServer -config=serverDZ.cfg -profiles=prof > patched.txt)
+check "self-test" "the library calls the patched lookup itself and logs the grid" grep -q "self-test: the engine's lookup now answers index 0 = 136.000, 1 = 136.050, 9 = 136.450, 399 = 155.950, 400 = 136.000 (wraps), -1 = 155.950 (wraps)" "$dir/lib/oz_frequencies.log"
+
+echo "no log file:"
+dir="$WORK/nolog"
+build "$dir" member "-O2"
+# A directory where the log file would be: nobody can open that for writing, root included.
+mkdir "$dir/lib/oz_frequencies.log"
+(cd "$dir" && LD_PRELOAD="$dir/lib/oz_frequencies.so" ./DayZServer -config=serverDZ.cfg -profiles=prof > patched.txt 2> stderr.txt)
+expected_patched > "$dir/expected.txt"
+check "no log file" "the lookup is patched all the same" cmp -s "$dir/expected.txt" "$dir/patched.txt"
+check "no log file" "the first line on standard error says why it is there" sh -c "head -1 '$dir/stderr.txt' | grep -q '^oz_frequencies: cannot write .*/oz_frequencies.log (Is a directory); its lines follow here$'"
+check "no log file" "and the log's lines follow it" grep -q "^oz_frequencies: [0-9:]*  patched: redirected 5 bytes" "$dir/stderr.txt"
+sed 's/^/    | /' "$dir/stderr.txt" | cut -c1-240
 
 echo "stranger:"
 dir="$WORK/stranger"
