@@ -3,6 +3,10 @@
 # the pbo ship on their own clocks, and one tag namespace for both would say
 # the radio is at 1.0 because its proxy is.
 #
+# THIS IS THE 1.30 BRANCH: everything a tag on it publishes is for DayZ 1.30
+# Experimental and says so -- the release is created as a pre-release, is never
+# marked "Latest", and its title and notes carry the word EXPERIMENTAL.
+#
 # The proxy is a native DLL, so the release is not a copy of anything from a
 # developer's machine: the runner compiles it from native/src with the same
 # build.ps1 an admin would run, and uploads what came out. The build script
@@ -65,7 +69,9 @@ jobs:
           $zip = (Get-ChildItem dist -Filter '*.zip' | Select-Object -First 1).FullName
           $sha = (Get-FileHash $zip -Algorithm SHA256).Hash
           $notes = @"
-          Server-side native mod that raises DayZ's eight radio channels to a number set in JSON.
+          **EXPERIMENTAL -- for DayZ 1.30 Experimental (server build 1.30.164014) only.** Built from the ``1.30`` branch. On a 1.29 (stable) server this build finds no 1.30 lookup, logs ``NOT PATCHED`` and changes nothing; use the ``proxy-v1.x`` releases from ``main`` there. When 1.30 reaches stable, re-check the log line ``found: lookup at ...`` on the stable build before trusting this release with it.
+
+          Server-side native mod that raises DayZ 1.30's nine radio channels to a number set in JSON.
 
           Built by this workflow from ``native/src`` on windows-latest, not uploaded from anyone's machine.
 
@@ -82,7 +88,7 @@ jobs:
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
             $ver = $tag -replace '^proxy-', ''
-            gh release create $tag --title "OpenZone frequency proxy $ver" --notes $notes
+            gh release create $tag --prerelease --title "OpenZone frequency proxy $ver -- DayZ 1.30 EXPERIMENTAL" --notes $notes
           }
           gh release upload $tag $zip --clobber
 
