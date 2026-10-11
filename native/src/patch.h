@@ -4,6 +4,11 @@
 // frequency is located by its own machine code every time the server starts, so
 // a game update moves it without breaking anything -- and if the shape it looks
 // for is gone, it says so instead of patching whatever happens to be there.
+//
+// Two builds compile that function differently (1.29 and earlier: an 18-byte
+// leaf masking the index by 7; 1.30: a 50-byte leaf reducing it modulo 9), and
+// 1.30 also inlines a copy into the transmitter initialiser. Each known shape is
+// described once, in patch.cpp; this header only names what was found.
 
 #pragma once
 
@@ -12,9 +17,14 @@
 
 struct PatchTargets
 {
-    unsigned char* func;        // entry of the 18-byte leaf that reads the table
-    unsigned char* table;       // the eight floats it reads, in .data
-    bool           tableIsVanilla;   // do those floats still match 87.8 .. 102.5
+    const char*    shape;            // which known shape the leaf matched
+    unsigned char* func;             // entry of the leaf that reads the table
+    size_t         funcLen;          // bytes the leaf occupies
+    unsigned char* table;            // the floats it reads, in .data
+    int            tableCount;       // how many the game ships there: 8 on 1.29, 9 on 1.30
+    bool           tableIsVanilla;   // do those floats match what that build ships
+    unsigned char* inlineAt;         // an inlined copy of the lookup that reads the same table, or null
+    size_t         inlineLen;        // bytes that copy occupies
 };
 
 // Locate the lookup in `module`. On failure, `why` says what was and was not
@@ -26,3 +36,8 @@ bool FindFrequencyCode(HMODULE module, PatchTargets* out, char* why, size_t whyL
 // Absolute rather than relative: our DLL can land further than 2 GB from the
 // executable, which a rel32 cannot reach.
 bool RedirectFunction(unsigned char* func, void* replacement, char* why, size_t whyLen);
+
+// Replace the inlined copy (when the build has one) with a call to
+// `replacement`, so the transmitter initialiser reads the same grid as every
+// later tuning. Only valid when `out->inlineAt` is set.
+bool PatchInlinedLookup(const PatchTargets* targets, void* replacement, char* why, size_t whyLen);

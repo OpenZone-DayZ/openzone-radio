@@ -259,6 +259,28 @@ extern "C" float OzFrequencyByIndex(void* /*self*/, int index)
     return static_cast<float>(g_config.base + i * g_config.step);
 }
 
+// ---------------------------------------------------------------- self-test
+
+// With OZ_FREQUENCIES_SELFTEST=1 in the environment, call the engine's lookup
+// through its own entry right after patching and log what it answers. The
+// entry now holds our jump, so this exercises the redirect itself on the real
+// binary -- the same check the Linux library offers, and the one that tells a
+// server operator in twenty seconds whether a new build is covered.
+static void SelfTest(unsigned char* func)
+{
+    wchar_t flag[8] = L"";
+    if (!GetEnvironmentVariableW(L"OZ_FREQUENCIES_SELFTEST", flag, 8) || flag[0] != L'1')
+        return;
+
+    typedef float (*Lookup)(void*, int);
+    Lookup lookup = reinterpret_cast<Lookup>(func);
+    const int n = g_config.count;
+    Log("self-test: the engine's lookup now answers index 0 = %.3f, 1 = %.3f, 9 = %.3f, "
+        "%d = %.3f, %d = %.3f (wraps), -1 = %.3f (wraps)",
+        lookup(0, 0), lookup(0, 1), lookup(0, 9),
+        n - 1, lookup(0, n - 1), n, lookup(0, n), lookup(0, -1));
+}
+
 // ------------------------------------------------------------------- start-up
 
 // Two ways to be the server, and both are needed.
@@ -359,7 +381,7 @@ static void Start(HMODULE self)
     LoadConfig();
 
     HMODULE host = GetModuleHandleW(NULL);
-    PatchTargets targets = { 0, 0, false };
+    PatchTargets targets = {};
     char why[512] = "";
 
     if (!FindFrequencyCode(host, &targets, why, sizeof(why)))
@@ -371,9 +393,9 @@ static void Start(HMODULE self)
 
     if (!targets.tableIsVanilla)
     {
-        Log("note: the game's own frequency table is not the eight this was "
+        Log("note: the game's own frequency table is not the %d this shape was "
             "written against -- the patch still applies, but re-check the "
-            "research notes against this build");
+            "research notes against this build", targets.tableCount);
     }
 
     if (!RedirectFunction(targets.func, reinterpret_cast<void*>(&OzFrequencyByIndex),
@@ -384,6 +406,21 @@ static void Start(HMODULE self)
     }
 
     Log("patched: %s", why);
+
+    // 1.30 inlines a second copy of the lookup into the transmitter
+    // initialiser. Without this a freshly created radio would start on the
+    // game's own table and only join the grid at its first tuning; with it,
+    // every path reads one grid. Failing here leaves the leaf patched.
+    if (targets.inlineAt)
+    {
+        if (PatchInlinedLookup(&targets, reinterpret_cast<void*>(&OzFrequencyByIndex),
+                               why, sizeof(why)))
+            Log("patched: %s", why);
+        else
+            Log("inlined copy left alone: %s", why);
+    }
+
+    SelfTest(targets.func);
     // The STEP gets four places, not three. It is the number most likely to
     // be mis-set, and at three places the shipped 0.0125 prints as 0.013 --
     // a log that rounds the value being checked is a log that lies about it.

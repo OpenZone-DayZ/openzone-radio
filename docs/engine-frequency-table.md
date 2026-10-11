@@ -380,3 +380,49 @@ OZ_Radio_1000m woke up on index 4760, outside its band 0..1120 - brought back to
 
 which is also the receipt for the keypad — 4760 is the index the tune had written
 and storage had kept.
+
+## 1.30 Experimental: nine channels and a new lookup (measured 2026-10-11)
+
+`DayZServer_x64.exe` 1.30.164014 (24 629 816 bytes, `.text` at `0x1000`, `.data` at
+`0x15E2000`) changes two things at once.
+
+The table has NINE `float32`, 80.0 MHz in front of the old eight, at RVA `0x16114C0`
+(file offset `0x160FAC0`, `.data`):
+
+```
+80.0  87.8  89.5  91.3  91.9  94.6  96.6  99.7  102.5
+```
+
+The lookup is still one leaf with the same calling convention (index in `edx`, result
+in `xmm0`), at RVA `0x90FA30`, but the mask by 7 is gone; the index is reduced modulo 9
+with a magic multiply and a signed wrap:
+
+```
+48 63 CA                       movsxd rcx, edx
+48 B8 8F E3 38 8E E3 38 8E E3  mov    rax, 0xE38E38E38E38E38F
+48 F7 E1                       mul    rcx
+48 C1 EA 03                    shr    rdx, 3
+48 8D 04 D2                    lea    rax, [rdx + rdx*8]
+48 2B C8                       sub    rcx, rax
+85 C9                          test   ecx, ecx
+8D 41 09                       lea    eax, [rcx + 9]
+0F 49 C1                       cmovns eax, ecx
+48 8D 0D 66 1A D0 00           lea    rcx, [rip + table]
+48 98                          cdqe
+F3 0F 10 04 81                 movss  xmm0, [rcx + rax*4]
+C3                             ret
+```
+
+Eight `call` sites reach it (1.29 had nine). The ninth caller of 1.29, the
+transmitter initialiser, has the same arithmetic inlined at RVA `0x90F967..0x90F998`,
+reading the index from `[rdi + 0x18]` and storing the result at `[rdi + 0x1C]`; its
+`lea` points at the same table. The proxy therefore redirects the leaf at its entry as
+before and replaces the inlined block with `mov edx, [rdi+0x18]; mov rax, imm64; call
+rax` padded with `nop`, so a freshly created transmitter reads the same grid as every
+later tuning.
+
+How it was re-found: the table by its float values (`87.8` and `102.5` as `float32`,
+checked for eight ascending floats in between), then every `rel32` in the executable
+sections whose rip-relative target lands inside the table (two hits), then the
+surrounding bytes disassembled. The redirect's calling convention is unchanged, so the
+replacement function did not change.

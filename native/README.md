@@ -150,11 +150,53 @@ Two refusals are deliberate:
 - **More than one match** — patching the wrong one of two identical leaves would
   be silent and very hard to trace, so it refuses rather than guess.
 
-Both are written to the log. The shape has been checked against
+Both are written to the log. The 1.29 shape has been checked against
 `DayZServer_x64.exe`, `DayZ_x64.exe` and `DayZDiag_x64.exe`: exactly one match in
 each, and in each the displacement lands on the eight vanilla frequencies.
 
+Three shapes are known (`src/patch.cpp`), and exactly one LEAF shape must match
+exactly once:
+
+| shape | build | what it is |
+|---|---|---|
+| `1.29 leaf` | up to 1.29 | 18 bytes: `and eax, 7`, eight-entry table |
+| `1.30 leaf` | 1.30.164014 | 50 bytes: the index reduced modulo 9 with a magic multiply, nine-entry table (80.0 MHz in front of the old eight); the same calling convention, eight `call` sites |
+| `1.30 inlined copy` | 1.30.164014 | the same arithmetic inlined into the transmitter initialiser, reading the index from the object; patched with a `call` to the replacement when it is unique and reads the same table, otherwise reported and left alone |
+
+With `OZ_FREQUENCIES_SELFTEST=1` in the environment the DLL calls the engine's
+lookup through its own entry right after patching and logs what it answers, the
+same check the Linux library offers.
+
 ## Status
+
+**1.30 Experimental (1.30.164014), measured 2026-10-11.** The builds before this
+branch refused on it by design (`NOT PATCHED: the frequency lookup's code shape
+is not present`): the game now ships nine channels and compiles the lookup as a
+50-byte leaf with a modulo-9 reduction, plus an inlined copy in the transmitter
+initialiser. Both shapes are in `src/patch.cpp` now. Measured against
+`DayZServer_x64.exe` 1.30.164014 (a second instance beside a running stand, no mods,
+`OZ_FREQUENCIES_SELFTEST=1`), the server alive through world load and the central
+economy's init:
+
+```
+found: lookup at +0x90FA30 (1.30 leaf, 50 bytes), table at +0x16114C0, table is the known vanilla nine; 1.30 inlined copy at +0x90F967 reads the same table
+patched: redirected 12 bytes
+patched: inlined copy: replaced 50 bytes with a call
+self-test: the engine's lookup now answers index 0 = 136.000, 1 = 136.050, 9 = 136.450, 399 = 155.950, 400 = 136.000 (wraps), -1 = 155.950 (wraps)
+channels: 400, from 136.000 MHz in steps of 0.0500 MHz (index 0 = 136.000, index 399 = 155.950)
+```
+
+The same build on retail 1.29.163709 still takes the old road:
+
+```
+found: lookup at +0x502D10 (1.29 leaf, 18 bytes), table at +0xE55570, table is the known vanilla eight
+patched: redirected 12 bytes
+self-test: the engine's lookup now answers index 0 = 136.000, 1 = 136.050, 9 = 136.450, 399 = 155.950, 400 = 136.000 (wraps), -1 = 155.950 (wraps)
+```
+
+Not yet measured on 1.30: the radio mod in game against the patched server (the
+`radio loaded: bands=400` line and a freshly spawned radio reading the grid through the
+inlined copy).
 
 **The patch works on a live server.** Measured 2026-08-30 against
 `DayZDiag_x64.exe -server` with `count: 16`:
@@ -232,6 +274,13 @@ started with the same environment (the launching shell, steamcmd) is left alone 
 Where the log file cannot be written, because the library sits in a directory the server's
 user may not write to, its lines go to the server's standard error instead, after one line
 saying why.
+
+**1.30 is not measured on Linux.** The library finds the lookup through the table and
+"the one instruction that addresses them with a mask by 7 beside it"; 1.30 replaced that
+mask with a modulo-9 reduction (see the Windows shapes above and
+`docs/engine-frequency-table.md`), so on a 1.30 Linux server it is expected to log
+`NOT PATCHED` until its finder learns the new shape. The 1.30 Linux depot was not on this
+machine when the Windows shapes were added.
 
 **Status: works on the real server.** Measured 2026-10-05 against `DayZServer` 1.29.163709
 (Steam depot 223352) on Ubuntu 24.04 under WSL2, with the game data of the Windows server of
