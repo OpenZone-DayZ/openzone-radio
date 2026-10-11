@@ -5,19 +5,12 @@
 
 // ------------------------------------------------------------------ the shapes
 //
-// Every DayZ build up to 1.29 compiled the lookup as one leaf:
+// DayZ 1.30 (Experimental 1.30.164014, measured 2026-10-11) ships NINE
+// channels -- 80.0 MHz in front of the eight every earlier build had -- and
+// compiles the lookup as one leaf that reduces the index modulo 9 with a magic
+// multiply:
 //
-//   8B C2                 mov   eax, edx            ; edx = tuned index
-//   48 8D 0D rel32        lea   rcx, [rip + table]
-//   83 E0 07              and   eax, 7              ; the entire eight-channel limit
-//   F3 0F 10 04 81        movss xmm0, [rcx + rax*4]
-//   C3                    ret
-//
-// 1.30 (Experimental 1.30.164014, measured 2026-10-11) ships NINE channels --
-// 80.0 MHz in front of the old eight -- and reduces the index modulo 9 with a
-// magic multiply instead of masking it:
-//
-//   48 63 CA              movsxd rcx, edx
+//   48 63 CA              movsxd rcx, edx                  ; edx = tuned index
 //   48 B8 imm64           mov    rax, 0xE38E38E38E38E38F   ; 1/9
 //   48 F7 E1              mul    rcx
 //   48 C1 EA 03           shr    rdx, 3
@@ -31,11 +24,10 @@
 //   F3 0F 10 04 81        movss  xmm0, [rcx + rax*4]
 //   C3                    ret
 //
-// The calling convention did not change: the index arrives in edx, the result
-// leaves in xmm0, and eight callers reach the leaf through `call`. The ninth
-// caller of 1.29 -- the transmitter initialiser, which stores the frequency
-// into the object -- has the same arithmetic INLINED on 1.30, reading the index
-// from the object:
+// Fifty bytes, the index in edx, the result in xmm0, eight callers through
+// `call`. The ninth caller -- the transmitter initialiser, which stores the
+// frequency into the object -- has the same arithmetic INLINED, reading the
+// index from the object:
 //
 //   48 63 4F 18           movsxd rcx, [rdi + 0x18]
 //   ... the same multiply, subtract and wrap, in a slightly different order ...
@@ -45,7 +37,9 @@
 //                         (then: movss [rdi + 0x1C], xmm0)
 //
 // Each shape is matched on everything except the rel32 and confirmed by
-// following that rel32 and looking at what it points at.
+// following that rel32 and looking at what it points at. The 1.29 shape (an
+// 18-byte leaf masking the index by 7, an eight-entry table) is not here: this
+// branch is 1.30's, and the main branch keeps the older one.
 
 struct Shape
 {
@@ -55,30 +49,19 @@ struct Shape
     size_t               len;
     size_t               relAt;        // offset of the lea's rel32
     size_t               relEnd;       // offset just past the lea: what the rel32 is relative to
-    const float*         vanilla;      // the table that build ships at the lea's target
-    int                  vanillaCount;
     bool                 isLeaf;       // a function to redirect at its entry
     const unsigned char* callPrefix;   // inlined copy only: how to load the index into edx
     size_t               callPrefixLen;
 };
 
-static const float kVanilla8[8] = {
-    87.8f, 89.5f, 91.3f, 91.9f, 94.6f, 96.6f, 99.7f, 102.5f
-};
-static const float kVanilla9[9] = {
+// What 1.30 ships at the lea's target, so a build that changed the table can
+// be reported rather than silently accepted.
+static const float kVanilla[9] = {
     80.0f, 87.8f, 89.5f, 91.3f, 91.9f, 94.6f, 96.6f, 99.7f, 102.5f
 };
+static const int kVanillaCount = static_cast<int>(sizeof(kVanilla) / sizeof(kVanilla[0]));
 
-static const unsigned char kLeaf129[] = {
-    0x8B, 0xC2,
-    0x48, 0x8D, 0x0D, 0x00, 0x00, 0x00, 0x00,
-    0x83, 0xE0, 0x07,
-    0xF3, 0x0F, 0x10, 0x04, 0x81,
-    0xC3,
-};
-static const char kLeaf129Mask[] = "xx" "xxx????" "xxx" "xxxxx" "x";
-
-static const unsigned char kLeaf130[] = {
+static const unsigned char kLeaf[] = {
     0x48, 0x63, 0xCA,
     0x48, 0xB8, 0x8F, 0xE3, 0x38, 0x8E, 0xE3, 0x38, 0x8E, 0xE3,
     0x48, 0xF7, 0xE1,
@@ -93,10 +76,10 @@ static const unsigned char kLeaf130[] = {
     0xF3, 0x0F, 0x10, 0x04, 0x81,
     0xC3,
 };
-static const char kLeaf130Mask[] =
+static const char kLeafMask[] =
     "xxx" "xxxxxxxxxx" "xxx" "xxxx" "xxxx" "xxx" "xx" "xxx" "xxx" "xxx????" "xx" "xxxxx" "x";
 
-static const unsigned char kInline130[] = {
+static const unsigned char kInlined[] = {
     0x48, 0x63, 0x4F, 0x18,
     0x48, 0xB8, 0x8F, 0xE3, 0x38, 0x8E, 0xE3, 0x38, 0x8E, 0xE3,
     0x48, 0xF7, 0xE1,
@@ -110,17 +93,16 @@ static const unsigned char kInline130[] = {
     0x48, 0x8D, 0x0D, 0x00, 0x00, 0x00, 0x00,
     0xF3, 0x0F, 0x10, 0x04, 0x81,
 };
-static const char kInline130Mask[] =
+static const char kInlinedMask[] =
     "xxxx" "xxxxxxxxxx" "xxx" "xxxx" "xxxx" "xxx" "xxx" "xx" "xxx" "xx" "xxx????" "xxxxx";
 
 // mov edx, dword ptr [rdi + 0x18] -- the index the inlined copy reads.
-static const unsigned char kInline130Prefix[] = { 0x8B, 0x57, 0x18 };
+static const unsigned char kInlinedPrefix[] = { 0x8B, 0x57, 0x18 };
 
 static const Shape kShapes[] = {
-    { "1.29 leaf",         kLeaf129,   kLeaf129Mask,   sizeof(kLeaf129),   5,  9,  kVanilla8, 8, true,  0, 0 },
-    { "1.30 leaf",         kLeaf130,   kLeaf130Mask,   sizeof(kLeaf130),   38, 42, kVanilla9, 9, true,  0, 0 },
-    { "1.30 inlined copy", kInline130, kInline130Mask, sizeof(kInline130), 41, 45, kVanilla9, 9, false,
-      kInline130Prefix, sizeof(kInline130Prefix) },
+    { "1.30 leaf",         kLeaf,    kLeafMask,    sizeof(kLeaf),    38, 42, true,  0, 0 },
+    { "1.30 inlined copy", kInlined, kInlinedMask, sizeof(kInlined), 41, 45, false,
+      kInlinedPrefix, sizeof(kInlinedPrefix) },
 };
 static const int kShapeCount = static_cast<int>(sizeof(kShapes) / sizeof(kShapes[0]));
 
@@ -214,10 +196,10 @@ bool FindFrequencyCode(HMODULE module, PatchTargets* out, char* why, size_t whyL
     if (leafShapes == 0)
     {
         _snprintf_s(why, whyLen, _TRUNCATE,
-                    "the frequency lookup's code shape is not present in %d executable "
-                    "section(s) (%d known shapes tried) -- the game changed how it "
-                    "compiles, nothing was patched",
-                    scanned, kShapeCount);
+                    "the 1.30 frequency lookup's code shape is not present in %d executable "
+                    "section(s) -- this is not a 1.30 server, or the game changed how it "
+                    "compiles; nothing was patched",
+                    scanned);
         return false;
     }
     if (leafShapes > 1)
@@ -244,28 +226,27 @@ bool FindFrequencyCode(HMODULE module, PatchTargets* out, char* why, size_t whyL
     // Confirm the target is inside the image, so a wild displacement cannot make
     // us report success about a random address.
     unsigned char* imageEnd = base + nt->OptionalHeader.SizeOfImage;
-    const size_t tableBytes = static_cast<size_t>(leaf.vanillaCount) * sizeof(float);
-    if (table < base || table + tableBytes > imageEnd)
+    if (table < base || table + sizeof(kVanilla) > imageEnd)
     {
         _snprintf_s(why, whyLen, _TRUNCATE,
                     "the lookup's table pointer lands outside the module image");
         return false;
     }
 
-    bool vanilla = (memcmp(table, leaf.vanilla, tableBytes) == 0);
+    bool vanilla = (memcmp(table, kVanilla, sizeof(kVanilla)) == 0);
 
     out->shape = leaf.name;
     out->func = func;
     out->funcLen = leaf.len;
     out->table = table;
-    out->tableCount = leaf.vanillaCount;
+    out->tableCount = kVanillaCount;
     out->tableIsVanilla = vanilla;
     out->inlineAt = 0;
     out->inlineLen = 0;
 
-    // An inlined copy is taken only when it is unique and reads the SAME table;
-    // anything else is reported and left alone, because the leaf alone already
-    // covers every tuning and a wrong mid-function patch would be fatal.
+    // The inlined copy is taken only when it is unique and reads the SAME
+    // table; anything else is reported and left alone, because the leaf alone
+    // already covers every tuning and a wrong mid-function patch would be fatal.
     char inlineNote[160] = "";
     for (int k = 0; k < kShapeCount; ++k)
     {
@@ -293,14 +274,12 @@ bool FindFrequencyCode(HMODULE module, PatchTargets* out, char* why, size_t whyL
                     static_cast<unsigned long long>(copy - base));
     }
 
-    static const char* kNumbers[] = { "eight", "nine" };
-    const char* number = (leaf.vanillaCount == 8) ? kNumbers[0] : kNumbers[1];
     _snprintf_s(why, whyLen, _TRUNCATE,
                 "lookup at +0x%llX (%s, %zu bytes), table at +0x%llX, table is %sthe known "
-                "vanilla %s%s",
+                "vanilla nine%s",
                 static_cast<unsigned long long>(func - base), leaf.name, leaf.len,
                 static_cast<unsigned long long>(table - base),
-                vanilla ? "" : "NOT ", number, inlineNote);
+                vanilla ? "" : "NOT ", inlineNote);
     return true;
 }
 
@@ -327,7 +306,7 @@ static bool WriteCode(unsigned char* at, const unsigned char* bytes, size_t len,
 
 bool RedirectFunction(unsigned char* func, void* replacement, char* why, size_t whyLen)
 {
-    // mov rax, imm64 ; jmp rax  -- 12 bytes into the 18 (or 50) the original occupies.
+    // mov rax, imm64 ; jmp rax  -- 12 bytes into the 50 the original occupies.
     unsigned char stub[kPatchLen];
     stub[0] = 0x48;
     stub[1] = 0xB8;

@@ -37,7 +37,7 @@ check() {  # name, message, command...
 }
 
 expected_patched() {
-    # base 136.0, step 0.05, count 400 -- native/oz_frequencies.json
+    # base 136.0, step 0.05, count 400 -- native/oz_frequencies.json; unpatched, 1.30 wraps index 9 to 80.000
     awk 'BEGIN { for (i = 0; i < 12; i++) printf "%d %.3f\n", i, 136.0 + i * 0.05 }'
 }
 
@@ -65,8 +65,9 @@ FLAGS="
 -O3 -no-pie -fno-pic -fcf-protection=none
 -O1
 -O1 -no-pie -fno-pic
--Os
 "
+# -Os is not in the list: at -Os GCC divides by nine with `div`, which the real
+# server (-O2) never does, and the library matches the engine's multiplier.
 
 echo "$FLAGS" | while IFS= read -r flags; do
     [ -n "$flags" ] || continue
@@ -77,7 +78,7 @@ echo "$FLAGS" | while IFS= read -r flags; do
         run_patched "$dir" patched.txt
         expected_patched > "$dir/expected.txt"
         check "$variant [$flags]" "every index is base + index * step ($(site "$dir"))" cmp -s "$dir/expected.txt" "$dir/patched.txt"
-        check "$variant [$flags]" "unpatched it wraps, and the log says patched" sh -c "grep -q '^9 89.500$' '$dir/plain.txt' && grep -q 'patched: redirected 5 bytes' '$dir/lib/oz_frequencies.log' && grep -q 'channels: 400' '$dir/lib/oz_frequencies.log'"
+        check "$variant [$flags]" "unpatched it wraps, and the log says patched" sh -c "grep -q '^9 80.000$' '$dir/plain.txt' && grep -q 'patched: redirected 5 bytes' '$dir/lib/oz_frequencies.log' && grep -q 'channels: 400' '$dir/lib/oz_frequencies.log'"
     done
 
     dir="$WORK/registers"
@@ -130,7 +131,7 @@ dir="$WORK/stranger"
 build "$dir" member "-O2"
 mv "$dir/DayZServer" "$dir/NotTheServer"
 (cd "$dir" && LD_PRELOAD="$dir/lib/oz_frequencies.so" ./NotTheServer > out.txt)
-check "stranger" "a process with another name is not patched" grep -q "^9 89.500$" "$dir/out.txt"
+check "stranger" "a process with another name is not patched" grep -q "^9 80.000$" "$dir/out.txt"
 check "stranger" "and nothing is logged for it" test ! -f "$dir/lib/oz_frequencies.log"
 (cd "$dir" && LD_PRELOAD="$dir/lib/oz_frequencies.so" ./NotTheServer -config=serverDZ.cfg > out.txt)
 check "stranger" "started like a server under another name, it says so" grep -q "NOT PATCHED: loaded into \"NotTheServer\"" "$dir/lib/oz_frequencies.log"

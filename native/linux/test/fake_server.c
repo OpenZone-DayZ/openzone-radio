@@ -1,8 +1,10 @@
 // A stand-in for the engine, for testing oz_frequencies.so without the game.
 //
-// It carries the same eight frequencies and looks them up the same way,
-// `table[index & 7]`, and prints what twelve indices map to. Unpatched, index 9
-// wraps to table[1] = 89.500; patched with the default grid it is 136.450.
+// It carries the same nine frequencies as 1.30 and looks them up the same way,
+// `table[index % 9]` with the index widened to 64 bits (which is what makes the
+// compiler emit the 1/9 multiplier the engine has), and prints what twelve
+// indices map to. Unpatched, index 9 wraps to table[0] = 80.000; patched with
+// the default grid it is 136.450.
 //
 // One variant per way a compiler may have built the real lookup:
 //   VARIANT_member     a member-shaped function, index is the second argument (esi)
@@ -18,9 +20,13 @@
 
 #include <stdio.h>
 
-static const float table[8] = {
-    87.8f, 89.5f, 91.3f, 91.9f, 94.6f, 96.6f, 99.7f, 102.5f
+static const float table[9] = {
+    80.0f, 87.8f, 89.5f, 91.3f, 91.9f, 94.6f, 96.6f, 99.7f, 102.5f
 };
+
+// The reduction exactly as the engine's compiler saw it: a 64-bit unsigned
+// modulo of the sign-extended index, which becomes the multiply by one ninth.
+#define WRAP(i) ((unsigned long)(long)(int)(i) % 9ul)
 
 #if defined(VARIANT_member) || defined(VARIANT_registers)
 
@@ -28,7 +34,7 @@ __attribute__((noinline, noclone))
 float frequency_by_index(void* self, int index)
 {
     (void)self;
-    return table[index & 7];
+    return table[WRAP(index)];
 }
 #define LOOKUP(i) frequency_by_index((void*)0, (i))
 
@@ -37,13 +43,13 @@ float frequency_by_index(void* self, int index)
 __attribute__((noinline, noclone))
 float frequency_by_index(int index)
 {
-    return table[index & 7];
+    return table[WRAP(index)];
 }
 #define LOOKUP(i) frequency_by_index(i)
 
 #elif defined(VARIANT_inlined)
 
-#define LOOKUP(i) (table[(i) & 7])
+#define LOOKUP(i) (table[WRAP(i)])
 
 #else
 #error "define VARIANT_member, VARIANT_free, VARIANT_inlined or VARIANT_registers"

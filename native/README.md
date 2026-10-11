@@ -154,12 +154,12 @@ Both are written to the log. The 1.29 shape has been checked against
 `DayZServer_x64.exe`, `DayZ_x64.exe` and `DayZDiag_x64.exe`: exactly one match in
 each, and in each the displacement lands on the eight vanilla frequencies.
 
-Three shapes are known (`src/patch.cpp`), and exactly one LEAF shape must match
-exactly once:
+This branch is 1.30's; the 18-byte shape of 1.29 and earlier (`and eax, 7` over an
+eight-entry table) lives on `main`. Two shapes are known here (`src/patch.cpp`), and
+the LEAF shape must match exactly once:
 
 | shape | build | what it is |
 |---|---|---|
-| `1.29 leaf` | up to 1.29 | 18 bytes: `and eax, 7`, eight-entry table |
 | `1.30 leaf` | 1.30.164014 | 50 bytes: the index reduced modulo 9 with a magic multiply, nine-entry table (80.0 MHz in front of the old eight); the same calling convention, eight `call` sites |
 | `1.30 inlined copy` | 1.30.164014 | the same arithmetic inlined into the transmitter initialiser, reading the index from the object; patched with a `call` to the replacement when it is unique and reads the same table, otherwise reported and left alone |
 
@@ -197,6 +197,8 @@ self-test: the engine's lookup now answers index 0 = 136.000, 1 = 136.050, 9 = 1
 Not yet measured on 1.30: the radio mod in game against the patched server (the
 `radio loaded: bands=400` line and a freshly spawned radio reading the grid through the
 inlined copy).
+
+### History: 1.29 and earlier (the main branch's shape)
 
 **The patch works on a live server.** Measured 2026-08-30 against
 `DayZDiag_x64.exe -server` with `count: 16`:
@@ -275,12 +277,46 @@ Where the log file cannot be written, because the library sits in a directory th
 user may not write to, its lines go to the server's standard error instead, after one line
 saying why.
 
-**1.30 is not measured on Linux.** The library finds the lookup through the table and
-"the one instruction that addresses them with a mask by 7 beside it"; 1.30 replaced that
-mask with a modulo-9 reduction (see the Windows shapes above and
-`docs/engine-frequency-table.md`), so on a 1.30 Linux server it is expected to log
-`NOT PATCHED` until its finder learns the new shape. The 1.30 Linux depot was not on this
-machine when the Windows shapes were added.
+**1.30 (this branch).** `DayZServer` 1.30.164014 (Steam app 1042420, Linux depot
+1042422; GCC, a fixed-base executable at `0x400000`) carries the same change as the
+Windows build: nine channels and a modulo-9 reduction. The library finds the table by its
+nine floats, then every reference to it, and accepts the one that sits inside the 1.30
+leaf -- a sign-extended argument, the multiplier `0xE38E38E38E38E38F`, a `mul`, the table
+instruction, a `movss` through it and a `ret` -- in whichever order the compiler put the
+first two. The jump goes to the function's ENTRY, found as the address the image's
+`call rel32` instructions land on (eight of them on the real server), so no instruction of
+the leaf runs before the stub saves the registers. The inlined copy in the transmitter
+initialiser is matched byte for byte (`[rbx + 0x18]` in, `[rbx + 0x1C]` out, the caller's
+`mov byte [rbx + 0x15], 1` in the middle) and replaced with a call that keeps that
+instruction; a copy that differs is reported and left alone. `sh native/linux/build.sh
+test` covers the leaf under GCC 13 at -O1, -O2 and -O3, PIE and fixed base, with and
+without ENDBR64, with all 24 clobberable registers checked, plus the profile grid, the
+self-test, the no-log-file path and the stranger gate.
+
+**1.30 on the real server.** Measured 2026-10-11 against `DayZServer` 1.30.164014 (depot
+1042422) on Ubuntu 24.04 under WSL2, with the game data of the Experimental Windows server,
+`BattlEye = 0`, `verifySignatures = 0` and `-mod=@CF;@OpenZone_Core;@OpenZone_Radio`. The
+library's log:
+
+```
+found: lookup at +0xDEC850 (46 bytes to its return, index in esi, the second argument), table at +0x1C2C360, table is the known vanilla nine; inlined copy at +0xDEC8CA reads the same table
+patched: redirected 5 bytes through a relay at 0x3f0000
+patched: inlined copy: replaced 50 bytes with a call
+channels: 400, from 136.000 MHz in steps of 0.0500 MHz (index 0 = 136.000, index 399 = 155.950)
+self-test: the engine's lookup now answers index 0 = 136.000, 1 = 136.050, 9 = 136.450, 399 = 155.950, 400 = 136.000 (wraps), -1 = 155.950 (wraps)
+```
+
+and the mod's own probe in the server's script log:
+
+```
+[OpenZone/Radio] band table measured: 400 frequencies  136 ..  155.95
+[OpenZone/Radio] ether derived from profiles: 136.000 to 155.950 MHz, step 0.0500, 400 divisions (in effect)
+[OpenZone/Radio] radio loaded: bands=400 profiles=7
+```
+
+The server reached `core loaded` and was stopped on SIGINT as usual.
+
+### History: 1.29 and earlier (the main branch's shape)
 
 **Status: works on the real server.** Measured 2026-10-05 against `DayZServer` 1.29.163709
 (Steam depot 223352) on Ubuntu 24.04 under WSL2, with the game data of the Windows server of
@@ -332,18 +368,14 @@ it does without the library too.)
 self-test: the engine's lookup now answers index 0 = 136.000, 1 = 136.050, 9 = 136.450, 399 = 155.950, 400 = 136.000 (wraps), -1 = 155.950 (wraps)
 ```
 
-**How the lookup is found.** The library was written before anyone here had the Linux
-binary, which comes from a different compiler than the Windows one, so it does not match
-fixed bytes:
-
-- it finds the lookup through the table: the eight vanilla frequencies as data, then the
-  one instruction that addresses them with a mask by 7 beside it and a return after it.
-  Position-independent or fixed-base, aligned or not, with or without an `ENDBR64` in
-  front, index in `esi` or in `edi`;
-- every reference to the table is written to the log with the bytes around it, so a refusal
-  on a future build is a report: send `oz_frequencies.log` and the shape can be added;
-- if the compiler inlined the lookup into its callers there is no function to redirect, and
-  it says `NOT PATCHED` and changes nothing.
+**How the lookup is found (1.29, for the record).** The main branch's library was
+written before anyone here had the Linux binary, which comes from a different compiler
+than the Windows one, so it did not match fixed bytes: it found the eight vanilla
+frequencies as data, then the one instruction that addressed them with a mask by 7 beside
+it and a return after it, wrote every reference to the table into the log with the bytes
+around it, and said `NOT PATCHED` when the lookup was inlined into its callers. This
+branch keeps the data-first approach and the logging, and replaces the mask rule with the
+1.30 leaf described above.
 
 The real server (GCC 7.5, a fixed-base executable at `0x400000`) has it as
 `lea rax, [rip + table]; and esi, 7; movss xmm0, [rax + rsi*4]; ret`, the mask after the

@@ -426,3 +426,31 @@ checked for eight ascending floats in between), then every `rel32` in the execut
 sections whose rip-relative target lands inside the table (two hits), then the
 surrounding bytes disassembled. The redirect's calling convention is unchanged, so the
 replacement function did not change.
+
+### The Linux server, 1.30
+
+`DayZServer` 1.30.164014 for Linux (Steam app 1042420, depot 1042422, 33 533 416 bytes, GCC,
+a fixed-base executable at `0x400000`, one R+X segment holding code and data alike) has the
+nine-entry table at VA `0x1C2C360` and the leaf at VA `0xDEC850` (`+0x9EC850` from the
+base), the index in `esi`:
+
+```
+48 63 F6                        movsxd rsi, esi
+48 BA 8F E3 38 8E E3 38 8E E3   movabs rdx, 0xE38E38E38E38E38F
+48 89 F0                        mov    rax, rsi
+48 F7 E2                        mul    rdx
+48 C1 EA 03                     shr    rdx, 3
+48 8D 04 D2                     lea    rax, [rdx + rdx*8]
+48 29 C6                        sub    rsi, rax
+48 8D 05 EB FA E3 00            lea    rax, [rip + table]
+48 63 D6                        movsxd rdx, esi
+F3 0F 10 04 90                  movss  xmm0, [rax + rdx*4]
+C3                              ret
+```
+
+Forty-six bytes, no signed-wrap fixup (GCC treats the reduction as unsigned), eight `call`
+sites. The transmitter initialiser inlines the same arithmetic at VA `0xDEC8CA`
+(`+0x9EC8CA`), reading `[rbx + 0x18]`, storing to `[rbx + 0x1C]`, with the caller's own
+`mov byte [rbx + 0x15], 1` between the multiplier load and the multiply. Found the same way
+as on Windows: the table by its floats, every `rel32` landing in it, capstone around the
+hits.

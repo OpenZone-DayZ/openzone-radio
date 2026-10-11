@@ -1,4 +1,5 @@
-// OpenZone: more radio frequencies, server side -- the native Linux server.
+// OpenZone: more radio frequencies, server side -- the native Linux server,
+// DayZ 1.30.
 //
 // The Windows server gets a proxy hid.dll (../src): the executable imports that
 // library, so a file with its name beside the executable is loaded first. The
@@ -9,41 +10,55 @@
 //     LD_PRELOAD=/path/to/oz_frequencies.so ./DayZServer -config=serverDZ.cfg -profiles=profiles
 //
 // What it replaces is the same thing: the engine's lookup from a tuned index to
-// a frequency, `table[index & 7]` over eight hardcoded floats, with
+// a frequency, `table[index % 9]` over nine hardcoded floats on 1.30, with
 // `base + index * step`. See ../../docs/engine-frequency-table.md.
 //
-// HOW THE LOOKUP IS FOUND, and why not the way the DLL does it. The DLL matches
-// eighteen exact bytes, because every Windows build compiles the lookup the
-// same way. The Linux build comes from a different compiler, and nobody here
-// had its bytes when this was written. So this starts from what cannot differ
-// -- the eight frequencies themselves, as data -- finds the instruction that
-// refers to that table, and accepts it only next to its two neighbours: the
-// mask of an argument with 7, and the return. Whatever it finds or fails to
-// find, it writes the bytes it looked at into the log, so that a refusal on a
-// real server is a report that can be acted on, not a shrug.
+// HOW THE LOOKUP IS FOUND. This starts from what cannot differ -- the nine
+// frequencies themselves, as data -- finds every instruction that refers to
+// that table, and accepts one only as part of the shape 1.30 compiles: the
+// argument sign-extended, the multiplier 0xE38E38E38E38E38F (one ninth, as a
+// 64-bit `mul`), the instruction that addresses the table, a `movss` through
+// it, and a `ret`. The jump goes to the function's entry, so every `call` to
+// it lands on the grid. Whatever it finds or fails to find, it writes the bytes
+// it looked at into the log, so that a refusal on a later build is a report.
 //
-// What the real server turned out to carry (build 1.29.163709, GCC 7.5, a
-// fixed-base executable at 0x400000; measured 2026-10-05), at +0x15BA5F0:
+// What `DayZServer` 1.30.164014 carries (GCC, a fixed-base executable at
+// 0x400000; measured 2026-10-11), at +0x9EC850:
 //
-//     48 8D 05 <rel32>     lea   rax, [rip + table]
-//     83 E6 07             and   esi, 7
-//     F3 0F 10 04 B0       movss xmm0, [rax + rsi*4]
-//     C3                   ret
+//     48 63 F6                        movsxd rsi, esi          ; esi = tuned index
+//     48 BA 8F E3 38 8E E3 38 8E E3   movabs rdx, 0xE38E38E38E38E38F
+//     48 89 F0                        mov    rax, rsi
+//     48 F7 E2                        mul    rdx
+//     48 C1 EA 03                     shr    rdx, 3
+//     48 8D 04 D2                     lea    rax, [rdx + rdx*8]
+//     48 29 C6                        sub    rsi, rax          ; index - 9*(index/9)
+//     48 8D 05 <rel32>                lea    rax, [rip + table]
+//     48 63 D6                        movsxd rdx, esi
+//     F3 0F 10 04 90                  movss  xmm0, [rax + rdx*4]
+//     C3                              ret
 //
-// -- the mask AFTER the table's address is taken, the reverse of the Windows
-// build. Found and patched on first contact, with nothing here changed for it.
+// -- forty-six bytes, the index in esi (the second argument of a member
+// function). The transmitter initialiser carries the same arithmetic INLINED,
+// at +0x9EC8CA, reading the index from the object (`[rbx + 0x18]`) and storing
+// the frequency back into it (`[rbx + 0x1C]`), with one instruction of the
+// caller's own in the middle (`mov byte [rbx + 0x15], 1`). That copy is matched
+// byte for byte and replaced with a call that keeps the caller's instruction,
+// so a freshly created transmitter reads the same grid as every later tuning.
+// The 1.29 shape (a mask with 7 over eight frequencies) is not here: this
+// branch is 1.30's, and the main branch keeps the older one.
 //
-// HOW IT IS REPLACED, and why not with the DLL's twelve bytes either. A
-// compiler that sees a three-instruction leaf knows exactly which registers it
-// touches, and may keep its own values in all the others across the call (GCC
-// does at -O2: -fipa-ra). A replacement written in C clobbers whatever the
+// HOW IT IS REPLACED. A compiler that sees a leaf knows exactly which registers
+// it touches, and may keep its own values in all the others across the call
+// (GCC does at -O2: -fipa-ra). A replacement written in C clobbers whatever the
 // calling convention lets it, and `mov rax, imm64; jmp rax` clobbers rax before
 // it even gets there -- measured on the stand-in server, where it turned every
-// frequency into 0.000 without crashing anything. So the site gets a five-byte
+// frequency into 0.000 without crashing anything. So the entry gets a five-byte
 // relative jump, which touches no register, to a relay page mapped within its
 // reach; the relay jumps through an absolute address to an assembly stub; and
 // the stub saves every register a caller could be relying on, calls the C
-// function, and restores them. Only xmm0, the result, comes back changed.
+// function, and restores them. Only xmm0, the result, comes back changed. The
+// inlined copy, which already clobbers rax, rcx and rdx itself, calls the same
+// stub through rax.
 //
 // Everything else is the DLL's behaviour on purpose: the same grid file, looked
 // for in the server's profile first and beside this library second; the same
@@ -88,9 +103,9 @@ static char g_profiles[PATH_MAX] = "";   // the server's -profiles directory, ab
 static char g_exe[PATH_MAX]      = "";   // bare name of the process we are in
 static int  g_looksLikeServer    = 0;    // its command line carries -config= or -profiles=
 
-// The eight vanilla frequencies, byte for byte what the engine carries.
-static const float kVanilla[8] = {
-    87.8f, 89.5f, 91.3f, 91.9f, 94.6f, 96.6f, 99.7f, 102.5f
+// The nine vanilla frequencies of 1.30, byte for byte what the engine carries.
+static const float kVanilla[9] = {
+    80.0f, 87.8f, 89.5f, 91.3f, 91.9f, 94.6f, 96.6f, 99.7f, 102.5f
 };
 
 // ------------------------------------------------------------------- the log
@@ -512,19 +527,96 @@ static void Hex(const unsigned char* p, size_t n, char* out, size_t cap)
         out[at - 1] = '\0';
 }
 
+// 0xE38E38E38E38E38F, the multiplier both compilers use for an unsigned 64-bit
+// division by nine, as the eight bytes of a `movabs`.
+static const unsigned char kMagic[8] = { 0x8F, 0xE3, 0x38, 0x8E, 0xE3, 0x38, 0x8E, 0xE3 };
+
+// The inlined copy in the transmitter initialiser, byte for byte as 1.30.164014
+// carries it, the rel32 of the lea wildcarded. rbx is the object, [rbx + 0x18]
+// the tuned index; the `mov byte [rbx + 0x15], 1` in the middle is the
+// caller's own and is kept when the block is replaced.
+static const unsigned char kInlined[] = {
+    0x48, 0x63, 0x4B, 0x18,                                     // movsxd rcx, [rbx + 0x18]
+    0x48, 0xBA, 0x8F, 0xE3, 0x38, 0x8E, 0xE3, 0x38, 0x8E, 0xE3, // movabs rdx, 1/9
+    0xC6, 0x43, 0x15, 0x01,                                     // mov byte [rbx + 0x15], 1
+    0x48, 0x89, 0xC8,                                           // mov rax, rcx
+    0x48, 0xF7, 0xE2,                                           // mul rdx
+    0x48, 0xC1, 0xEA, 0x03,                                     // shr rdx, 3
+    0x48, 0x8D, 0x04, 0xD2,                                     // lea rax, [rdx + rdx*8]
+    0x48, 0x29, 0xC1,                                           // sub rcx, rax
+    0x48, 0x8D, 0x05, 0x00, 0x00, 0x00, 0x00,                   // lea rax, [rip + table]
+    0x48, 0x63, 0xC9,                                           // movsxd rcx, ecx
+    0xF3, 0x0F, 0x10, 0x04, 0x88,                               // movss xmm0, [rax + rcx*4]
+};
+#define INLINED_LEN     ((int)sizeof(kInlined))
+#define INLINED_REL_AT  38   // the lea's rel32
+#define INLINED_REL_END 42   // what that rel32 is relative to
+static const unsigned char kInlinedKeep[] = { 0xC6, 0x43, 0x15, 0x01 };  // mov byte [rbx + 0x15], 1
+static const unsigned char kInlinedLoad[] = { 0x8B, 0x73, 0x18 };        // mov esi, [rbx + 0x18]
+
 struct Found
 {
-    unsigned char* site;      // where the jump goes: the first of the lookup's instructions we own
-    unsigned char* ret;       // the lookup's `ret`
+    unsigned char* site;      // the leaf's entry: where the jump goes
+    unsigned char* ret;       // the leaf's `ret`
     unsigned char* table;
     int            argIndex;  // 2: the index is in esi; 1: in edi
+    unsigned char* inlineAt;  // the inlined copy that reads the same table, or NULL
 };
 
-// Is `ref` -- four bytes of code that address the table -- part of the lookup?
-// The lookup is three things in a row, in either order of the first two: an
-// `and` of a register with 7, the instruction that addresses the table, and a
-// `ret`. Nothing here assumes where the function starts or how it is aligned.
-static int MatchAt(unsigned char* ref, struct Found* out)
+// The address in [lo, hi] that `call rel32` instructions in the image land
+// on -- the most called one when there are several -- or NULL.
+static unsigned char* CallTarget(unsigned char* lo, unsigned char* hi)
+{
+    unsigned char* cand[8];
+    int candN[8];
+    int nc = 0;
+    for (int s = 0; s < g_nsegs; s++)
+    {
+        if (!g_segs[s].exec || g_segs[s].size < 5)
+            continue;
+        unsigned char* a = g_segs[s].start;
+        unsigned char* end = a + g_segs[s].size;
+        for (unsigned char* p = a; p + 5 <= end; p++)
+        {
+            if (*p != 0xE8)
+                continue;
+            int32_t rel;
+            memcpy(&rel, p + 1, 4);
+            unsigned char* t = p + 5 + rel;
+            if (t < lo || t > hi)
+                continue;
+            int k;
+            for (k = 0; k < nc && cand[k] != t; k++)
+                ;
+            if (k == nc)
+            {
+                if (nc == 8)
+                    continue;
+                cand[nc] = t;
+                candN[nc] = 0;
+                nc++;
+            }
+            candN[k]++;
+        }
+    }
+    unsigned char* best = NULL;
+    int bestN = 0;
+    for (int k = 0; k < nc; k++)
+    {
+        if (candN[k] > bestN)
+        {
+            best = cand[k];
+            bestN = candN[k];
+        }
+    }
+    return best;
+}
+
+// Is `ref` -- four bytes of code that address the table -- the one inside the
+// LEAF? The leaf is: a movsxd of the argument, the multiplier, a mul, the
+// instruction that addresses the table, a movss through it, a ret. Nothing
+// here assumes alignment; an ENDBR64 in front belongs to the function.
+static int MatchLeaf(unsigned char* ref, struct Found* out)
 {
     const struct Seg* seg = ExecSeg(ref);
     if (!seg)
@@ -532,19 +624,36 @@ static int MatchAt(unsigned char* ref, struct Found* out)
     unsigned char* lo  = seg->start;
     unsigned char* end = seg->start + seg->size;
 
-    // The instruction that addresses the table.
+    // The instruction that addresses the table, and the movss that reads it.
     unsigned char* ri;
+    unsigned char* movss = NULL;
     if (ref - lo >= 3 && (ref[-3] & 0xFB) == 0x48 && ref[-2] == 0x8D && (ref[-1] & 0xC7) == 0x05)
+    {
         ri = ref - 3;   // lea r64, [rip + table]; a movss through that register follows
+        for (unsigned char* p = ref + 4; p + 5 <= end && p < ref + 4 + 12; p++)
+        {
+            if (p[0] == 0xF3 && p[1] == 0x0F && p[2] == 0x10 && p[3] == 0x04)
+            {
+                movss = p;
+                break;
+            }
+        }
+    }
     else if (ref - lo >= 5 && ref[-5] == 0xF3 && ref[-4] == 0x0F && ref[-3] == 0x10
              && ref[-2] == 0x04 && (ref[-1] & 0xC7) == 0x85)
+    {
         ri = ref - 5;   // movss xmm0, [index * 4 + table], in an executable at a fixed base
+        movss = ri;
+    }
     else
         return 0;
+    if (!movss)
+        return 0;
 
-    // The return: right after, or after one more short instruction.
+    // The return: right after the movss, or after one more short instruction.
+    unsigned char* after = (movss == ri) ? ref + 4 : movss + 5;
     unsigned char* ret = NULL;
-    for (unsigned char* p = ref + 4; p < end && p < ref + 4 + 12; p++)
+    for (unsigned char* p = after; p < end && p < after + 8; p++)
     {
         if (*p == 0xC3)
         {
@@ -555,52 +664,86 @@ static int MatchAt(unsigned char* ref, struct Found* out)
     if (!ret)
         return 0;
 
-    // `and r32, 7` is 83 /4 ib: 83, a ModRM of E0..E7, 07. It is the table
-    // instruction's neighbour: before it, with at most a register copy between,
-    // or right behind it.
-    unsigned char* from = ri - lo >= 8 ? ri - 8 : lo;
-    unsigned char* mask = NULL;
-    for (unsigned char* p = from; p + 2 < ret; p++)
+    // The multiplier, loaded by a movabs at most 48 bytes before the table
+    // instruction, and a mul between the two.
+    unsigned char* magic = NULL;
+    for (unsigned char* p = ri - 10; p >= lo && p >= ri - 48; p--)
     {
-        if (p[0] == 0x83 && (p[1] & 0xF8) == 0xE0 && p[2] == 0x07)
+        if ((p[0] & 0xFE) == 0x48 && (p[1] & 0xF8) == 0xB8 && memcmp(p + 2, kMagic, sizeof(kMagic)) == 0)
         {
-            mask = p;
+            magic = p;
             break;
         }
     }
-    if (!mask)
+    if (!magic)
         return 0;
-    if (mask < ri && ri - (mask + 3) > 3)
-        return 0;
-    if (mask > ri && (mask < ref + 4 || mask - (ref + 4) > 3))
-        return 0;
-
-    // Which argument is being masked: esi or edi directly, or a copy of one of
-    // them made just before (mov in either encoding, or movsxd).
-    int reg = mask[1] & 7;
-    int arg = reg == 6 ? 2 : (reg == 7 ? 1 : 0);
-    for (unsigned char* p = from; !arg && p + 1 < mask; p++)
+    int mul = 0;
+    for (unsigned char* p = magic + 10; p + 2 < ri; p++)
     {
-        unsigned char op = p[0], modrm = p[1];
-        if ((modrm & 0xC0) != 0xC0)
-            continue;
-        int r = (modrm >> 3) & 7, rm = modrm & 7;
-        if (op == 0x89 && rm == reg)
-            arg = r == 6 ? 2 : (r == 7 ? 1 : 0);
-        else if ((op == 0x8B || op == 0x63) && r == reg)
-            arg = rm == 6 ? 2 : (rm == 7 ? 1 : 0);
+        if ((p[0] & 0xFE) == 0x48 && p[1] == 0xF7 && (p[2] & 0xF8) == 0xE0)
+            mul = 1;
     }
-    if (!arg)
+    if (!mul)
         return 0;
 
-    unsigned char* site = mask < ri ? mask : ri;
-    if (ret + 1 - site < 5)
+    // The argument: a movsxd of esi or edi between the function's start and
+    // the table instruction, in whichever order the compiler put it and the
+    // multiplier (GCC 7 sign-extends first, GCC 13 loads the multiplier first).
+    unsigned char* movsxd = NULL;
+    int arg = 0;
+    for (unsigned char* p = magic - 16 >= lo ? magic - 16 : lo; p + 2 < ri && !movsxd; p++)
+    {
+        if (p[0] == 0x48 && p[1] == 0x63 && (p[2] & 0xC0) == 0xC0)
+        {
+            int rm = p[2] & 7;
+            if (rm == 6 || rm == 7)
+            {
+                movsxd = p;
+                arg = rm == 6 ? 2 : 1;
+            }
+        }
+    }
+    if (!movsxd)
         return 0;
+    unsigned char* first = movsxd < magic ? movsxd : magic;
 
-    out->site = site;
+    // The entry: where the callers land. A `call rel32` whose target sits in
+    // the few bytes before the first instruction recognised names it exactly
+    // -- the compiler may have put a register copy or an ENDBR64 there, and a
+    // jump written anywhere later would let those instructions run first and
+    // lose what they clobber. Without any caller in the image, the first
+    // recognised instruction is taken, an ENDBR64 in front of it included.
+    unsigned char* entry = CallTarget(first - 16 >= lo ? first - 16 : lo, first);
+    if (!entry)
+    {
+        entry = first;
+        if (entry - lo >= 4 && entry[-4] == 0xF3 && entry[-3] == 0x0F && entry[-2] == 0x1E && entry[-1] == 0xFA)
+            entry -= 4;
+    }
+
+    out->site = entry;
     out->ret = ret;
     out->argIndex = arg;
     return 1;
+}
+
+// Is `ref` the lea inside the inlined copy, byte for byte? Returns its start.
+static unsigned char* MatchInlined(unsigned char* ref)
+{
+    const struct Seg* seg = ExecSeg(ref);
+    if (!seg)
+        return NULL;
+    unsigned char* at = ref - INLINED_REL_AT;
+    if (at < seg->start || at + INLINED_LEN > seg->start + seg->size)
+        return NULL;
+    for (int i = 0; i < INLINED_LEN; i++)
+    {
+        if (i >= INLINED_REL_AT && i < INLINED_REL_END)
+            continue;
+        if (at[i] != kInlined[i])
+            return NULL;
+    }
+    return at;
 }
 
 // Returns 1 with *out filled, or 0 with `why` saying what was seen instead.
@@ -632,18 +775,21 @@ static int FindLookup(struct Found* out, char* why, size_t whyLen)
     if (ntables == 0)
     {
         snprintf(why, whyLen,
-                 "the eight vanilla frequencies are not in the executable (%d segment(s) searched) "
-                 "-- the game changed its table, and this build finds the lookup through it; "
+                 "the nine vanilla frequencies of 1.30 are not in the executable (%d segment(s) "
+                 "searched) -- this is not a 1.30 server, or the game changed its table; "
                  "nothing was patched", g_nsegs);
         return 0;
     }
 
     // Every place in the code whose four bytes land on a table: as a
-    // displacement from the next instruction in a position-independent
-    // executable, or as the bare address in one linked at a fixed base.
+    // displacement from the next instruction, or as the bare address in an
+    // executable linked at a fixed base.
     struct Found found[MAX_REFS];
     int nfound = 0;
     int nrefs = 0;
+    unsigned char* inlined[MAX_REFS];
+    unsigned char* inlinedTable[MAX_REFS];
+    int ninlined = 0;
 
     for (int s = 0; s < g_nsegs; s++)
     {
@@ -681,8 +827,18 @@ static int FindLookup(struct Found* out, char* why, size_t whyLen)
                 nrefs, (unsigned long long)(p - g_base), (unsigned long long)(table - g_base),
                 (unsigned long long)(a - g_base), hex);
 
+            unsigned char* copy = MatchInlined(p);
+            if (copy && ninlined < MAX_REFS)
+            {
+                inlined[ninlined] = copy;
+                inlinedTable[ninlined] = table;
+                ninlined++;
+                continue;
+            }
+
             struct Found one;
-            if (!MatchAt(p, &one))
+            memset(&one, 0, sizeof(one));
+            if (!MatchLeaf(p, &one))
                 continue;
             one.table = table;
 
@@ -704,10 +860,10 @@ static int FindLookup(struct Found* out, char* why, size_t whyLen)
     if (nfound == 0)
     {
         snprintf(why, whyLen,
-                 "%d reference(s) to the vanilla table, none of them beside a mask with 7 and a "
-                 "return -- this build compiles the lookup differently (inlined into its "
-                 "callers, most likely); the bytes are in the lines above, nothing was patched",
-                 nrefs);
+                 "%d reference(s) to the vanilla table, none of them the 1.30 leaf (a sign-extended "
+                 "argument, the 1/9 multiplier, a mul, the table, a movss and a return) -- this "
+                 "build compiles the lookup differently; the bytes are in the lines above, "
+                 "nothing was patched", nrefs);
         return 0;
     }
     if (nfound > 1)
@@ -722,12 +878,33 @@ static int FindLookup(struct Found* out, char* why, size_t whyLen)
     }
 
     *out = found[0];
+
+    // The inlined copy is taken only when it is unique and reads the same
+    // table; anything else is reported and left alone, because the leaf alone
+    // already covers every tuning and a wrong mid-function patch would be fatal.
+    char inlineNote[160] = "; no inlined copy";
+    if (ninlined == 1 && inlinedTable[0] == out->table)
+    {
+        out->inlineAt = inlined[0];
+        snprintf(inlineNote, sizeof(inlineNote), "; inlined copy at +0x%llX reads the same table",
+                 (unsigned long long)(inlined[0] - g_base));
+    }
+    else if (ninlined == 1)
+    {
+        snprintf(inlineNote, sizeof(inlineNote), "; inlined copy at +0x%llX reads another table, left alone",
+                 (unsigned long long)(inlined[0] - g_base));
+    }
+    else if (ninlined > 1)
+    {
+        snprintf(inlineNote, sizeof(inlineNote), "; %d inlined copies, left alone", ninlined);
+    }
+
     snprintf(why, whyLen,
              "lookup at +0x%llX (%d bytes to its return, index in %s), table at +0x%llX, "
-             "table is the known vanilla eight",
+             "table is the known vanilla nine%s",
              (unsigned long long)(out->site - g_base), (int)(out->ret + 1 - out->site),
              out->argIndex == 2 ? "esi, the second argument" : "edi, the first argument",
-             (unsigned long long)(out->table - g_base));
+             (unsigned long long)(out->table - g_base), inlineNote);
     return 1;
 }
 
@@ -833,6 +1010,51 @@ static int Redirect(unsigned char* site, void* stub, char* why, size_t whyLen)
     return 1;
 }
 
+// The inlined copy: the caller's own instruction first, then the index into
+// esi, then a call to the member stub through rax -- which the original block
+// clobbers anyway -- and nops to the end of the block. The stub saves and
+// restores every other register and leaves the frequency in xmm0, which is
+// exactly what the instruction after the block stores.
+static int PatchInlined(unsigned char* at, void* stub, char* why, size_t whyLen)
+{
+    unsigned char code[sizeof(kInlined)];
+    size_t n = 0;
+    memcpy(code + n, kInlinedKeep, sizeof(kInlinedKeep));
+    n += sizeof(kInlinedKeep);
+    memcpy(code + n, kInlinedLoad, sizeof(kInlinedLoad));
+    n += sizeof(kInlinedLoad);
+    code[n++] = 0x48;
+    code[n++] = 0xB8;
+    memcpy(code + n, &stub, sizeof(void*));
+    n += sizeof(void*);
+    code[n++] = 0xFF;
+    code[n++] = 0xD0;
+    while (n < sizeof(code))
+        code[n++] = 0x90;
+
+    const size_t page = (size_t)sysconf(_SC_PAGESIZE);
+    uintptr_t from = (uintptr_t)at & ~(uintptr_t)(page - 1);
+    uintptr_t to = ((uintptr_t)at + sizeof(code) + page - 1) & ~(uintptr_t)(page - 1);
+    if (mprotect((void*)from, to - from, PROT_READ | PROT_WRITE) != 0)
+    {
+        snprintf(why, whyLen, "mprotect(read+write) on the inlined copy failed: %s; left alone",
+                 strerror(errno));
+        return 0;
+    }
+    memcpy(at, code, sizeof(code));
+    if (mprotect((void*)from, to - from, PROT_READ | PROT_EXEC) != 0)
+    {
+        snprintf(why, whyLen,
+                 "mprotect(read+exec) failed AFTER the inlined copy was written: %s -- that page "
+                 "of the server's code is left without execute permission and the server will "
+                 "crash; start it without this library", strerror(errno));
+        return 0;
+    }
+    __builtin___clear_cache((char*)at, (char*)at + sizeof(code));
+    snprintf(why, whyLen, "inlined copy: replaced %d bytes with a call", INLINED_LEN);
+    return 1;
+}
+
 // The engine's lookup, called the way the engine calls it. Only meaningful
 // after the redirect: from the site on, the original bytes are no longer a
 // function of their own.
@@ -899,6 +1121,15 @@ static void Start(void)
     }
 
     Log("patched: %s", why);
+
+    if (found.inlineAt)
+    {
+        if (PatchInlined(found.inlineAt, (void*)&oz_stub_member, why, sizeof(why)))
+            Log("patched: %s", why);
+        else
+            Log("inlined copy left alone: %s", why);
+    }
+
     Log("channels: %d, from %.3f MHz in steps of %.4f MHz (index 0 = %.3f, index %d = %.3f)",
         g_config.count, g_config.base, g_config.step,
         g_config.base, g_config.count - 1,
