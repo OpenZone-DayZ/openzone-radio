@@ -45,7 +45,7 @@
 // byte for byte and replaced with a call that keeps the caller's instruction,
 // so a freshly created transmitter reads the same grid as every later tuning.
 // The 1.29 shape (a mask with 7 over eight frequencies) is not here: this
-// branch is 1.30's, and the main branch keeps the older one.
+// code is 1.30's, and the last build that knows the older one is proxy-v1.1.0.
 //
 // HOW IT IS REPLACED. A compiler that sees a leaf knows exactly which registers
 // it touches, and may keep its own values in all the others across the call

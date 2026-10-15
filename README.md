@@ -2,18 +2,18 @@
 
 *[Українською](README.uk.md)* · [**Steam Workshop**](https://steamcommunity.com/sharedfiles/filedetails/?id=3794105144)
 
-DayZ ships with **eight** radio frequencies. This mod turns that into as many as you
-configure — up to thousands — so a server can have real channels instead of eight
-crowded ones.
+DayZ ships with **nine** radio frequencies (eight before 1.30). This mod turns that into
+as many as you configure — up to thousands — so a server can have real channels instead
+of nine crowded ones.
 
 It runs on **any server and any map**, and it is configured entirely from JSON.
 
-> **This mod alone will not widen the band.** The eight frequencies are a limit in the
+> **This mod alone will not widen the band.** The vanilla frequencies are a limit in the
 > game's own executable, not in its scripts, so no script mod can lift it. A small
 > **server-side native library** does the lifting, and it ships in this repository —
 > see [Widening the band](#widening-the-band). Without it the mod still installs and
 > runs; it detects the unpatched server, says so in the log, and leaves the vanilla
-> eight channels alone.
+> channels alone.
 
 ## What you get
 
@@ -120,10 +120,11 @@ server, so a stock client plays on a patched server normally — measured, not a
 
 ## Widening the band
 
-The engine computes a frequency as `table[index & 7]`: eight floats and a bitmask, in an
-eighteen-byte function. `native/` contains a proxy `hid.dll` that replaces that one
-function with `base + index * step`, which removes the table, the mask and the
-power-of-two limit together.
+The engine computes a frequency as `table[index % 9]`: nine floats and a modulo, in a
+fifty-byte function and one inlined copy of it (DayZ 1.30; 1.29 had eight floats and a
+bitmask). `native/` contains a proxy `hid.dll` that replaces both with
+`base + index * step`, which removes the table, the modulo and the fixed count together.
+The build for DayZ 1.30 is `proxy-v2.0.0`; `proxy-v1.1.0` is the last one for 1.29.
 
 **Server only, by design.** The proxy patches nothing unless the process was started
 with `-server`, **or** the executable is the dedicated server binary
@@ -141,8 +142,9 @@ cd native
 **On a native Linux server** the same replacement is `oz_frequencies.so`, loaded with
 `LD_PRELOAD`: the Linux build of the server has no `hid.dll` to stand in for. The grid
 file, the log and the server-only rule are the same. Measured on the real `DayZServer`
-1.29: 400 channels with the library, the vanilla eight without it. The details are in
-"The native Linux server" of [`native/README.md`](native/README.md).
+1.30.164014: 400 channels with the library; on 1.29 also the vanilla eight without it.
+The details are in "The native
+Linux server" of [`native/README.md`](native/README.md).
 
 ```sh
 sh native/linux/build.sh

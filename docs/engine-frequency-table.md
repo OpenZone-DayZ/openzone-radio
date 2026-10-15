@@ -427,6 +427,13 @@ sections whose rip-relative target lands inside the table (two hits), then the
 surrounding bytes disassembled. The redirect's calling convention is unchanged, so the
 replacement function did not change.
 
+### 1.30 stable (measured 2026-10-15)
+
+`DayZServer_x64.exe` 1.30.164078 (Steam app 223350, 24 849 464 bytes) carries the same two
+shapes, moved: the leaf at RVA `0x92E9C0`, the inlined copy at `0x92E8F7`, the nine-entry
+table at `0x1644170`. The proxy found, patched and self-tested both without a change to its
+code; the log lines are in `native/README.md`, "Status".
+
 ### The Linux server, 1.30
 
 `DayZServer` 1.30.164014 for Linux (Steam app 1042420, depot 1042422, 33 533 416 bytes, GCC,

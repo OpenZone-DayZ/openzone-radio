@@ -5,9 +5,9 @@
 // a game update moves it without breaking anything -- and if the shape it looks
 // for is gone, it says so instead of patching whatever happens to be there.
 //
-// This branch is 1.30's: a 50-byte leaf reducing the index modulo 9 over a
+// This code is 1.30's: a 50-byte leaf reducing the index modulo 9 over a
 // nine-entry table, plus a copy of it inlined into the transmitter initialiser.
-// The 18-byte leaf of 1.29 and earlier lives on the main branch. Each known
+// The 18-byte leaf of 1.29 and earlier is gone (proxy-v1.1.0 has it). Each known
 // shape is described once, in patch.cpp; this header only names what was found.
 
 #pragma once

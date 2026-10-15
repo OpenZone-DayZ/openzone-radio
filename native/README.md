@@ -1,8 +1,8 @@
 # OpenZone frequency proxy
 
-A server-side native mod that raises DayZ's eight radio channels to a number set
-in JSON. Loads as a proxy `hid.dll` beside the game executable and replaces the
-one engine function that turns a tuned index into a frequency. For the native
+A server-side native mod that raises DayZ's nine radio channels (DayZ 1.30; eight
+before it) to a number set in JSON. Loads as a proxy `hid.dll` beside the game
+executable and replaces the one engine function that turns a tuned index into a frequency. For the native
 Linux server the same replacement is a shared object, `oz_frequencies.so`,
 loaded with `LD_PRELOAD`; see "The native Linux server" below.
 
@@ -11,11 +11,12 @@ measured in the binaries, and why the design looks like this.
 
 ## What it does
 
-The engine computes a frequency as `table[index & 7]` — eight floats in `.data`
-and one `and eax, 7`, in an eighteen-byte leaf function. This replaces that
-function with `base + index * step`, which removes the table, the mask and the
-power-of-two constraint at once. Indices wrap within `count`, so `SetNextChannel`
-still cycles the way the vanilla mask made it.
+The engine computes a frequency as `table[index % 9]` — nine floats in `.data`
+and a modulo by a magic multiply, in a fifty-byte leaf function, with the same
+arithmetic inlined once more into the transmitter initialiser. This replaces both
+with `base + index * step`, which removes the table, the modulo and the fixed
+count at once. Indices wrap within `count`, so `SetNextChannel` still cycles the
+way the vanilla modulo made it.
 
 Delivery is decided only on the server, so **stock clients need no native code**
 — see the research notes for the call-graph evidence.
@@ -150,18 +151,17 @@ Two refusals are deliberate:
 - **More than one match** — patching the wrong one of two identical leaves would
   be silent and very hard to trace, so it refuses rather than guess.
 
-Both are written to the log. The 1.29 shape has been checked against
-`DayZServer_x64.exe`, `DayZ_x64.exe` and `DayZDiag_x64.exe`: exactly one match in
-each, and in each the displacement lands on the eight vanilla frequencies.
+Both are written to the log.
 
-This branch is 1.30's; the 18-byte shape of 1.29 and earlier (`and eax, 7` over an
-eight-entry table) lives on `main`. Two shapes are known here (`src/patch.cpp`), and
-the LEAF shape must match exactly once:
+This code is 1.30's. The 18-byte shape of 1.29 and earlier (`and eax, 7` over an
+eight-entry table) is gone from it; the last build that knows it is the
+`proxy-v1.1.0` release. Two shapes are known here (`src/patch.cpp`), and the LEAF
+shape must match exactly once:
 
 | shape | build | what it is |
 |---|---|---|
-| `1.30 leaf` | 1.30.164014 | 50 bytes: the index reduced modulo 9 with a magic multiply, nine-entry table (80.0 MHz in front of the old eight); the same calling convention, eight `call` sites |
-| `1.30 inlined copy` | 1.30.164014 | the same arithmetic inlined into the transmitter initialiser, reading the index from the object; patched with a `call` to the replacement when it is unique and reads the same table, otherwise reported and left alone |
+| `1.30 leaf` | 1.30.164014, 1.30.164078 | 50 bytes: the index reduced modulo 9 with a magic multiply, nine-entry table (80.0 MHz in front of the old eight); the same calling convention, eight `call` sites |
+| `1.30 inlined copy` | 1.30.164014, 1.30.164078 | the same arithmetic inlined into the transmitter initialiser, reading the index from the object; patched with a `call` to the replacement when it is unique and reads the same table, otherwise reported and left alone |
 
 With `OZ_FREQUENCIES_SELFTEST=1` in the environment the DLL calls the engine's
 lookup through its own entry right after patching and logs what it answers, the
@@ -169,8 +169,25 @@ same check the Linux library offers.
 
 ## Status
 
+**1.30 stable (1.30.164078), measured 2026-10-15.** Both shapes found again, moved by
+the update, against `DayZServer_x64.exe` 1.30.164078 from Steam app 223350 (no mods,
+`OZ_FREQUENCIES_SELFTEST=1`), the server alive through world load and the central
+economy's init:
+
+```
+found: lookup at +0x92E9C0 (1.30 leaf, 50 bytes), table at +0x1644170, table is the known vanilla nine; 1.30 inlined copy at +0x92E8F7 reads the same table
+patched: redirected 12 bytes
+patched: inlined copy: replaced 50 bytes with a call
+self-test: the engine's lookup now answers index 0 = 136.000, 1 = 136.050, 9 = 136.450, 399 = 155.950, 400 = 136.000 (wraps), -1 = 155.950 (wraps)
+channels: 400, from 136.000 MHz in steps of 0.0500 MHz (index 0 = 136.000, index 399 = 155.950)
+```
+
+The same server with the full OpenZone set (CF, VPP, core, factions, PDA, radio and
+their glue) took its grid from the profile and the radio mod measured it:
+`radio loaded: bands=400 profiles=7`, no script errors.
+
 **1.30 Experimental (1.30.164014), measured 2026-10-11.** The builds before this
-branch refused on it by design (`NOT PATCHED: the frequency lookup's code shape
+code refused on it by design (`NOT PATCHED: the frequency lookup's code shape
 is not present`): the game now ships nine channels and compiles the lookup as a
 50-byte leaf with a modulo-9 reduction, plus an inlined copy in the transmitter
 initialiser. Both shapes are in `src/patch.cpp` now. Measured against
@@ -186,19 +203,11 @@ self-test: the engine's lookup now answers index 0 = 136.000, 1 = 136.050, 9 = 1
 channels: 400, from 136.000 MHz in steps of 0.0500 MHz (index 0 = 136.000, index 399 = 155.950)
 ```
 
-The same build on retail 1.29.163709 still takes the old road:
+In game on the same build, with the full stand: `radio loaded: bands=400 profiles=7`,
+and a freshly spawned radio in a client's hands showed 136.000 MHz, a value it can only
+get through the patched inlined copy.
 
-```
-found: lookup at +0x502D10 (1.29 leaf, 18 bytes), table at +0xE55570, table is the known vanilla eight
-patched: redirected 12 bytes
-self-test: the engine's lookup now answers index 0 = 136.000, 1 = 136.050, 9 = 136.450, 399 = 155.950, 400 = 136.000 (wraps), -1 = 155.950 (wraps)
-```
-
-Not yet measured on 1.30: the radio mod in game against the patched server (the
-`radio loaded: bands=400` line and a freshly spawned radio reading the grid through the
-inlined copy).
-
-### History: 1.29 and earlier (the main branch's shape)
+### History: 1.29 and earlier (the shape `proxy-v1.1.0` patches)
 
 **The patch works on a live server.** Measured 2026-08-30 against
 `DayZDiag_x64.exe -server` with `count: 16`:
@@ -277,7 +286,7 @@ Where the log file cannot be written, because the library sits in a directory th
 user may not write to, its lines go to the server's standard error instead, after one line
 saying why.
 
-**1.30 (this branch).** `DayZServer` 1.30.164014 (Steam app 1042420, Linux depot
+**1.30.** `DayZServer` 1.30.164014 (Steam app 1042420, Linux depot
 1042422; GCC, a fixed-base executable at `0x400000`) carries the same change as the
 Windows build: nine channels and a modulo-9 reduction. The library finds the table by its
 nine floats, then every reference to it, and accepts the one that sits inside the 1.30
@@ -316,7 +325,7 @@ and the mod's own probe in the server's script log:
 
 The server reached `core loaded` and was stopped on SIGINT as usual.
 
-### History: 1.29 and earlier (the main branch's shape)
+### History: 1.29 and earlier (the shape `proxy-v1.1.0` patches)
 
 **Status: works on the real server.** Measured 2026-10-05 against `DayZServer` 1.29.163709
 (Steam depot 223352) on Ubuntu 24.04 under WSL2, with the game data of the Windows server of
@@ -368,13 +377,13 @@ it does without the library too.)
 self-test: the engine's lookup now answers index 0 = 136.000, 1 = 136.050, 9 = 136.450, 399 = 155.950, 400 = 136.000 (wraps), -1 = 155.950 (wraps)
 ```
 
-**How the lookup is found (1.29, for the record).** The main branch's library was
+**How the lookup is found (1.29, for the record).** The 1.29 library was
 written before anyone here had the Linux binary, which comes from a different compiler
 than the Windows one, so it did not match fixed bytes: it found the eight vanilla
 frequencies as data, then the one instruction that addressed them with a mask by 7 beside
 it and a return after it, wrote every reference to the table into the log with the bytes
 around it, and said `NOT PATCHED` when the lookup was inlined into its callers. This
-branch keeps the data-first approach and the logging, and replaces the mask rule with the
+code keeps the data-first approach and the logging, and replaces the mask rule with the
 1.30 leaf described above.
 
 The real server (GCC 7.5, a fixed-base executable at `0x400000`) has it as

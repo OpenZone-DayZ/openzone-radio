@@ -5,7 +5,8 @@
 
 // ------------------------------------------------------------------ the shapes
 //
-// DayZ 1.30 (Experimental 1.30.164014, measured 2026-10-11) ships NINE
+// DayZ 1.30 (Experimental 1.30.164014, measured 2026-10-11; stable
+// 1.30.164078, the same shapes, measured 2026-10-15) ships NINE
 // channels -- 80.0 MHz in front of the eight every earlier build had -- and
 // compiles the lookup as one leaf that reduces the index modulo 9 with a magic
 // multiply:
@@ -39,7 +40,7 @@
 // Each shape is matched on everything except the rel32 and confirmed by
 // following that rel32 and looking at what it points at. The 1.29 shape (an
 // 18-byte leaf masking the index by 7, an eight-entry table) is not here: this
-// branch is 1.30's, and the main branch keeps the older one.
+// code is 1.30's, and the last build that knows the older one is proxy-v1.1.0.
 
 struct Shape
 {
