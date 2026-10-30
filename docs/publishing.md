@@ -9,7 +9,7 @@ is ready, what is not, and what has to be decided by a person.
 
 > **Superseded 2026-09-09.** The owner decided to publish **every** OpenZone mod, the
 > two glue mods included: OpenZone Core and OpenZone PDA go to the Workshop as well, so
-> a subscriber can satisfy the hard dependencies there. The same `ZoneProtocol` key now
+> a subscriber can satisfy the hard dependencies there. The same `OpenZone` key now
 > signs the whole series (`keys/` in every repository, private half never committed),
 > and every repository carries `packaging/` and `package.ps1` copied from this one.
 
@@ -23,11 +23,11 @@ is ready, what is not, and what has to be decided by a person.
   so a subscriber needs OpenZone Core and OpenZone PDA from the Workshop too -- which is
   why the 2026-09-01 decision to ship only `@OpenZone_Radio` was superseded (see above).
   Three Workshop items, three mods in git.
-- **Signed.** Key `ZoneProtocol`, created 2026-09-01 with `DSCreateKey`. All three pbos
-  carry `*.ZoneProtocol.bisign`, and `keys/ZoneProtocol.bikey` is placed inside every
+- **Signed.** Key `OpenZone`, created 2026-10-30 with `DSCreateKey`. All three pbos
+  carry `*.OpenZone.bisign`, and `keys/OpenZone.bikey` is placed inside every
   `@Mod` folder at build time, so a server running `verifySignatures = 2` can accept
   them. The key lives once in git, in `keys/` at the repository root.
-  > **The private key is not in git and must never be.** `keys/ZoneProtocol.biprivatekey`
+  > **The private key is not in git and must never be.** `keys/OpenZone.biprivatekey`
   > exists only on the build machine and is covered by `.gitignore`. **Back it up
   > somewhere outside this repository.** Losing it means every future release is signed
   > by a different key, and every server that installed the old `.bikey` has to replace
@@ -122,7 +122,7 @@ The owner drives Publisher — the GUI tools are not run from here.
 
 > **Скасовано 2026-09-09.** Власник вирішив публікувати **кожен** мод OpenZone, обидві
 > склейки включно: OpenZone Core і OpenZone PDA теж ідуть у Workshop, тож жорсткі
-> залежності підписник задовольнить там само. Той самий ключ `ZoneProtocol` тепер
+> залежності підписник задовольнить там само. Той самий ключ `OpenZone` тепер
 > підписує всю серію (`keys/` у кожному репозиторії, приватна половина не комітиться),
 > і кожен репозиторій має `packaging/` та `package.ps1`, скопійовані звідси.
 
@@ -139,11 +139,11 @@ The owner drives Publisher — the GUI tools are not run from here.
   підписнику потрібні ще OpenZone Core і OpenZone PDA з Workshop -- саме тому рішення
   2026-09-01 «лише `@OpenZone_Radio`» скасовано (див. вище). Три елементи Workshop,
   три моди в git.
-- **Підписано.** Ключ `ZoneProtocol`, створений 2026-09-01 через `DSCreateKey`. Усі три
-  pbo несуть `*.ZoneProtocol.bisign`, а `keys/ZoneProtocol.bikey` кладеться в кожну теку
+- **Підписано.** Ключ `OpenZone`, створений 2026-10-30 через `DSCreateKey`. Усі три
+  pbo несуть `*.OpenZone.bisign`, а `keys/OpenZone.bikey` кладеться в кожну теку
   `@Mod` під час збірки, тож сервер із `verifySignatures = 2` їх прийме. У git ключ
   лежить один раз — у `keys/` в корені репозиторію.
-  > **Приватного ключа в git немає, і бути не мусить.** `keys/ZoneProtocol.biprivatekey`
+  > **Приватного ключа в git немає, і бути не мусить.** `keys/OpenZone.biprivatekey`
   > існує лише на складальній машині й покритий `.gitignore`. **Зробіть резервну копію
   > поза цим репозиторієм.** Втратити його означає, що кожен наступний випуск підписаний
   > іншим ключем, і кожен сервер, який поставив старий `.bikey`, мусить його замінити.
