@@ -6,7 +6,7 @@
 // is a server owner discovering it at start-up.
 
 name        = "OpenZone Radio PDA";
-author      = "Zone Protocol";
+author      = "OpenZone";
 authorID    = "";
 version     = "0.1";
 description = "Companion mod. Puts OpenZone Radio into a PDA device bay as a board. REQUIRES OpenZone Radio, OpenZone Core and OpenZone PDA -- without all three the game refuses to load. github.com/covalschi/openzone-radio";

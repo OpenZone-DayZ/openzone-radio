@@ -10,7 +10,7 @@
 // nothing, so a wrong path is worse than none. Add them here when art exists.
 
 name        = "OpenZone Radio";
-author      = "Zone Protocol";
+author      = "OpenZone";
 authorID    = "";
 version     = "0.1";
 

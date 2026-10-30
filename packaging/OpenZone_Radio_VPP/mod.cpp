@@ -6,7 +6,7 @@
 // requirement.
 
 name        = "OpenZone Radio VPP";
-author      = "Zone Protocol";
+author      = "OpenZone";
 authorID    = "";
 version     = "0.1";
 description = "Companion mod. Adds an admin tab for editing radio profiles in game. REQUIRES OpenZone Radio, OpenZone Core, OpenZone VPP and VPPAdminTools -- without them the game refuses to load. github.com/covalschi/openzone-radio";

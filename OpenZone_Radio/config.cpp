@@ -54,8 +54,8 @@ class CfgMods
     {
         dir        = "OpenZone_Radio";
         name       = "OpenZone Radio";
-        credits    = "Zone Protocol";
-        author     = "Zone Protocol";
+        credits    = "OpenZone";
+        author     = "OpenZone";
         type       = "mod";
 
         dependencies[] = {"Game", "World", "Mission"};
