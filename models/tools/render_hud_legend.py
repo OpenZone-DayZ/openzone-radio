@@ -1,8 +1,8 @@
 """Frequency window legend: the faces of all radios, with color for the keys that work in the window.
 
-    python tools/render_hud_legend.py [out.jpg] [--lang en|uk]      (system Python with Pillow)
+    python tools/render_hud_legend.py [out.jpg] [--lang en|ua]      (system Python with Pillow)
 
-Without --lang - English (../docs/tutorial/hud_legend.en.jpg); --lang uk writes hud_legend.uk.jpg there.
+Without --lang - English (../docs/tutorial/hud_legend.en.jpg); --lang ua writes hud_legend.ua.jpg there.
 
 Draws from the same things the window is built from: the face - assets/<radio>/work/hud/face.png (written
 by render_hud_faces.py and make_hud_layouts.py), keys and screen - from hud_spec.py through the same Frame
@@ -76,7 +76,7 @@ FOOTER = "Close the window with the cross in the corner, the K key or Esc. Drag 
 
 # Translations: role captions, per-radio lines and the footer line. The reference-radio names are unchanged across languages.
 TRANSLATIONS = {
-    "uk": dict(
+    "ua": dict(
         roles={"digit": "цифри — набір частоти",
                "step": "крок: у T-388 і LXT одразу новий канал, в решти — сусідній у рядок набору",
                "go": "налаштувати (як TUNE у моді рації)",

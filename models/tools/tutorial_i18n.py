@@ -1,14 +1,14 @@
 """Tutorial translations: the English markup in tutorial.html is the base, and pairs of
 "English chunk -> translation" go here.
 
-render_tutorial.py --lang uk applies them to the markup text. If the English text changes and a pair is
+render_tutorial.py --lang ua applies them to the markup text. If the English text changes and a pair is
 left stale, the render stops and names the chunk - so the translation does not silently fall behind. Game
 strings (Outside this set's band, ON AIR, LOCKED, Radio: push to talk) - from OpenZone_Radio/stringtable.csv,
 as shown by the game.
 """
 NL = "\n"
 
-UK = [
+UA = [
     # --- header
     ('>guide<',
      '>інструкція<'),
@@ -151,4 +151,4 @@ UK = [
      'канал ${n}<b>'),
 ]
 
-TRANSLATIONS = {"uk": UK}
+TRANSLATIONS = {"ua": UA}

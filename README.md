@@ -1,6 +1,6 @@
 # OpenZone Radio
 
-*[Українською](README.uk.md)* · [**Steam Workshop**](https://steamcommunity.com/sharedfiles/filedetails/?id=3794105144)
+*[Українською](README.ua.md)* · [**Steam Workshop**](https://steamcommunity.com/sharedfiles/filedetails/?id=3794105144)
 
 DayZ ships with **nine** radio frequencies (eight before 1.30). This mod turns that into
 as many as you configure — up to thousands — so a server can have real channels instead

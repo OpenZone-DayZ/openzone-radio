@@ -1,8 +1,8 @@
 """Player-facing tutorial: how to use the radios - in one picture.
 
-    python tools/render_tutorial.py [out.png] [--lang en|uk]       (system Python with Pillow)
+    python tools/render_tutorial.py [out.png] [--lang en|ua]       (system Python with Pillow)
 
-Without --lang - English (../docs/tutorial/tutorial.en.png/.jpg); --lang uk writes tutorial.uk.png/.jpg there,
+Without --lang - English (../docs/tutorial/tutorial.en.png/.jpg); --lang ua writes tutorial.ua.png/.jpg there,
 the text comes from tutorial_i18n.py laid over the same markup.
 
 Assembled from the same things as the game and the window legend: faces - assets/<radio>/work/hud/face.png, keys -
@@ -26,6 +26,8 @@ import render_hud_legend as L  # noqa: E402
 
 ARGS = sys.argv[1:]
 LANG = ARGS[ARGS.index("--lang") + 1] if "--lang" in ARGS else "en"
+# Our code for Ukrainian is "ua", but the page's lang attribute is read by the browser, which knows only the ISO code "uk".
+HTML_LANG = {"ua": "uk"}
 POS = [a for i, a in enumerate(ARGS) if not a.startswith("--") and (i == 0 or ARGS[i - 1] != "--lang")]
 DOCS = os.path.normpath(os.path.join(S.ROOT, "..", "docs", "tutorial"))   # the repository's docs, where players look
 OUT = POS[0] if POS else os.path.join(DOCS, "tutorial.%s.png" % LANG)
@@ -106,7 +108,7 @@ def main():
             if src not in html:
                 sys.exit("render_tutorial: no chunk to translate in the markup: %r" % src[:80])
             html = html.replace(src, dst)
-        html = html.replace('<html lang="en">', '<html lang="%s">' % LANG)
+        html = html.replace('<html lang="en">', '<html lang="%s">' % HTML_LANG.get(LANG, LANG))
     html = html.replace("/*DATA*/null", json.dumps(data))
     page = os.path.join(BUILD, "index.html")
     open(page, "w", encoding="utf-8").write(html)

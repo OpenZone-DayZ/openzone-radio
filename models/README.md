@@ -63,12 +63,12 @@ it tunes).
 ## Pictures for players
 
 - The tutorial, one picture: [EN](../docs/tutorial/tutorial.en.jpg) ·
-  [UK](../docs/tutorial/tutorial.uk.jpg). `tools/tutorial.html` is the English page,
+  [UA](../docs/tutorial/tutorial.ua.jpg). `tools/tutorial.html` is the English page,
   `tools/tutorial_i18n.py` the Ukrainian phrases laid over it; the shot is taken with headless
-  Chrome: `python tools/render_tutorial.py [--lang en|uk]`.
+  Chrome: `python tools/render_tutorial.py [--lang en|ua]`.
 - The frequency-window legend, which keys do what on each face:
-  [EN](../docs/tutorial/hud_legend.en.jpg) · [UK](../docs/tutorial/hud_legend.uk.jpg);
-  `python tools/render_hud_legend.py [--lang en|uk]`.
+  [EN](../docs/tutorial/hud_legend.en.jpg) · [UA](../docs/tutorial/hud_legend.ua.jpg);
+  `python tools/render_hud_legend.py [--lang en|ua]`.
 - The lineup of the six: `blender -b -P tools/render_lineup.py` (the in-game LOD1 from
   `<radio>_game.blend`).
 

@@ -65,7 +65,7 @@ The pictures under the preview, the item's screenshot strip, go up with
 `workshop_publish("OpenZone_Radio", previews=["docs/tutorial/lineup.jpg", ...], content=False)`
 (each under 1 MB). Every such call ADDS pictures, Steam keeps the earlier ones, so a picture
 is sent once; taking one down is done on the item's page. Sent 2026-09-27: the lineup, the
-tutorial (EN, UK) and the legend (EN, UK) from `docs/tutorial/`.
+tutorial (EN, UA) and the legend (EN, UA) from `docs/tutorial/`.
 
 `packaging/<Mod>.workshop.png` is the preview image the item's page shows: 1024x512 PNG, under
 1 MB, sent with `workshop_publish("<Mod>", preview="packaging/<Mod>.workshop.png", content=False)`
