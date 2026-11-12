@@ -1,0 +1,63 @@
+{
+  "layout": "ozr_vpp_pane",
+  "note": "Рація › Профілі рацій (VPP rework 2026-11-12, design 5.4; artboard RadioProfiles): the radio profiles as a list and the picked profile's card -- its item class, band and step, its range from the item's config, the ether the profiles make against the running one, and the checks. Until 2026-11-12 this was the one hand-written layout of the window; now it is generated from this description. Created by OZR_VppPane.OnCreate under M_SUB_WIDGET and registered as the page radio.profiles of the module radio; the shell moves it into the content area. Colours are the window's metal (the vpp* tokens of this repository's ui/tokens.json, the core's values). Names the script reads: RadList, RadF_*, RadGrid, RadEther, RadHint (the page's hint line, named to RegisterPage), BtnRad*, OzrCardTitle, OzrWarn, OzrDot0-2, RadF_*Frame, OzrHead, OzrHeadRule, OzrDivider, OzrRangeH.",
+  "root": {"frame": {"name": "OzrPane", "size": "$vpp.content", "hidden": true, "priority": 2, "note": "Hidden: ShowPane shows the open page and hides the rest. The shell moves the root into the content area and sizes it; 1060 x 680 is the content area of the default window.", "children": [
+    {"frame": {"name": "OzrRoot", "size": "fill", "note": "Proportional: follows the pane root when the shell resizes it.", "children": [
+      {"frame": {"name": "OzrHead", "at": [0, 0], "size": [1060, 60], "note": "The page head: title and one line on the left, the page's actions anchored right. OnWindowResized keeps it as wide as the page, so the actions follow the right edge.", "children": [
+        {"label": {"name": "OzrHeadTitle", "at": [24, 9], "size": [560, 26], "text": "#STR_OZR_VPP_PAGE_PROFILES", "font": "title", "color": "$vppText"}},
+        {"label": {"name": "OzrHeadSub", "at": [24, 35], "size": [560, 18], "text": "#STR_OZR_VPP_SUB", "font": "small", "color": "$vppMuted"}},
+        {"button": {"name": "BtnRadReload", "at": [320, 15], "size": [130, 30], "text": "#STR_OZ_VPP_RELOAD", "bg": "$vppRaised", "edge": "$vppEdge", "color": "$vppText", "font": "small", "anchor": "right", "note": "Reads the profiles from the server again; with unsaved edits it asks first."}},
+        {"button": {"name": "BtnRadCheck", "at": [182, 15], "size": [130, 30], "text": "#STR_OZR_VPP_CHECK", "bg": "$vppRaised", "edge": "$vppEdge", "color": "$vppText", "font": "small", "anchor": "right", "note": "Recounts the checks and the ether from the fields as they are typed now."}},
+        {"button": {"name": "BtnRadSave", "at": [24, 15], "size": [150, 30], "text": "#STR_OZR_VPP_SAVE_ALL", "bg": "$vppAccent", "edge": "$vppAccent", "color": "$vppScreen", "font": "small", "anchor": "right", "note": "Writes every profile to the server: asks on the window's confirm strip."}},
+        {"panel": {"name": "OzrHeadRule", "at": [0, 59], "size": [1060, 1], "color": "$vppEdge"}}
+      ]}},
+      {"label": {"name": "OzrColHead", "at": [24, 76], "size": [472, 18], "text": "#STR_OZR_VPP_COLS", "font": "small", "color": "$vppMuted"}},
+      {"listbox": {"name": "RadList", "at": [24, 98], "size": [472, 446], "font": "field", "color": "$vppText", "props": {"style": "NoScrollBar", "title visible": false, "highlight row": true, "lines": 15}, "note": "One row per profile: the item class, the band and the step, the range from the item's config. Filled by AddItem; OnWindowResized gives it the page's height."}},
+      {"button": {"name": "BtnRadNew", "at": [24, 556], "size": [200, 32], "text": "#STR_OZR_VPP_NEW", "bg": "$vppRaised", "edge": "$vppEdge", "color": "$vppText", "font": "small", "note": "A new profile on the running ether's grid; it reaches the server with Save all."}},
+      {"text": {"name": "OzrRangeNote", "at": [24, 596], "size": [472, 32], "text": "#STR_OZR_VPP_RANGE_NOTE", "font": "small", "color": "$vppMuted", "grow": false}},
+      {"panel": {"name": "OzrDivider", "at": [520, 60], "size": [1, 620], "color": "$vppEdge"}},
+      {"frame": {"name": "OzrCard", "at": [521, 60], "size": [539, 620], "note": "The picked profile: its fields, the ether it makes, the checks.", "children": [
+        {"label": {"name": "OzrCardTitle", "at": [24, 12], "size": [491, 28], "text": "#STR_OZR_VPP_PICK", "font": "title", "color": "$vppMuted"}},
+        {"panel": {"name": "OzrProfBox", "at": [24, 48], "size": [491, 178], "color": "$vppHead", "edge": true, "children": [
+          {"label": {"name": "OzrProfLegend", "at": [16, 6], "size": [300, 18], "text": "#STR_OZR_VPP_G_PROFILE", "font": "small", "color": "$vppMuted"}},
+          {"label": {"name": "OzrClassL", "at": [16, 30], "size": [300, 18], "text": "#STR_OZR_VPP_F_CLASS", "font": "small", "color": "$vppMuted"}},
+          {"field": {"name": "RadF_Class", "at": [16, 52], "size": [300, 32], "color": "$vppText"}},
+          {"label": {"name": "OzrRangeL", "at": [330, 30], "size": [143, 18], "text": "#STR_OZR_VPP_F_RANGE", "font": "small", "color": "$vppMuted"}},
+          {"panel": {"name": "OzrRangeBox", "at": [330, 52], "size": [143, 32], "color": "$vppPanel", "edge": true, "note": "Read only: the range lives in the item's config.cpp and the engine reads it there; no script can change it on a running server.", "children": [
+            {"label": {"name": "RadF_Range", "at": [8, 0], "size": [127, 32], "text": "-", "font": "small", "color": "$vppText"}}
+          ]}},
+          {"label": {"name": "OzrRangeH", "at": [330, 86], "size": [143, 18], "text": "#STR_OZR_VPP_F_RANGE_HINT", "font": "small", "color": "$vppMuted"}},
+          {"label": {"name": "OzrMinL", "at": [16, 110], "size": [143, 18], "text": "#STR_OZR_VPP_F_MIN", "font": "small", "color": "$vppMuted"}},
+          {"field": {"name": "RadF_Min", "at": [16, 132], "size": [143, 32], "color": "$vppText"}},
+          {"label": {"name": "OzrMaxL", "at": [173, 110], "size": [143, 18], "text": "#STR_OZR_VPP_F_MAX", "font": "small", "color": "$vppMuted"}},
+          {"field": {"name": "RadF_Max", "at": [173, 132], "size": [143, 32], "color": "$vppText"}},
+          {"label": {"name": "OzrStepL", "at": [330, 110], "size": [143, 18], "text": "#STR_OZR_VPP_F_STEP", "font": "small", "color": "$vppMuted"}},
+          {"field": {"name": "RadF_Step", "at": [330, 132], "size": [143, 32], "color": "$vppText"}}
+        ]}},
+        {"panel": {"name": "OzrEtherBox", "at": [24, 238], "size": [491, 136], "color": "$vppHead", "edge": true, "children": [
+          {"label": {"name": "OzrEtherLegend", "at": [16, 6], "size": [300, 18], "text": "#STR_OZR_VPP_G_ETHER", "font": "small", "color": "$vppMuted"}},
+          {"label": {"name": "OzrNowL", "at": [16, 30], "size": [130, 22], "text": "#STR_OZR_VPP_ETHER_NOW", "font": "small", "color": "$vppMuted"}},
+          {"label": {"name": "RadGrid", "at": [150, 30], "size": [325, 22], "text": "", "font": "small", "color": "$vppText"}},
+          {"label": {"name": "OzrNextL", "at": [16, 56], "size": [130, 22], "text": "#STR_OZR_VPP_ETHER_NEXT", "font": "small", "color": "$vppMuted"}},
+          {"label": {"name": "RadEther", "at": [150, 56], "size": [325, 22], "text": "", "font": "small", "color": "$vppText"}},
+          {"frame": {"name": "OzrWarn", "at": [16, 86], "size": [459, 36], "hidden": true, "note": "Shown while the ether the profiles make differs from the running one: the grid file is read when the server PROCESS starts, so the new ether waits for a restart.", "children": [
+            {"panel": {"name": "OzrWarnEdge", "at": [0, 0], "size": [459, 36], "color": "$vppAlert"}},
+            {"panel": {"name": "OzrWarnFill", "at": [1, 1], "size": [457, 34], "color": "$vppHead"}},
+            {"label": {"name": "OzrWarnText", "at": [12, 0], "size": [435, 36], "text": "#STR_OZR_VPP_RESTART", "font": "small", "color": "$vppAlert"}}
+          ]}}
+        ]}},
+        {"panel": {"name": "OzrCheckBox", "at": [24, 386], "size": [491, 116], "color": "$vppHead", "edge": true, "children": [
+          {"label": {"name": "OzrCheckLegend", "at": [16, 6], "size": [300, 18], "text": "#STR_OZR_VPP_G_CHECK", "font": "small", "color": "$vppMuted"}},
+          {"panel": {"name": "OzrDot0", "at": [16, 37], "size": [8, 8], "color": "$vppFaint"}},
+          {"label": {"name": "RadF_Chan", "at": [32, 30], "size": [443, 22], "text": "-", "font": "small", "color": "$vppText"}},
+          {"panel": {"name": "OzrDot1", "at": [16, 61], "size": [8, 8], "color": "$vppFaint"}},
+          {"label": {"name": "RadF_Fit1", "at": [32, 54], "size": [443, 22], "text": "-", "font": "small", "color": "$vppText"}},
+          {"panel": {"name": "OzrDot2", "at": [16, 85], "size": [8, 8], "color": "$vppFaint"}},
+          {"label": {"name": "RadF_Fit2", "at": [32, 78], "size": [443, 22], "text": "-", "font": "small", "color": "$vppText"}}
+        ]}},
+        {"button": {"name": "BtnRadDel", "at": [24, 514], "size": [180, 32], "text": "#STR_OZR_VPP_DELETE", "bg": "$vppPanel", "edge": "$vppBad", "color": "$vppBad", "font": "small", "note": "Takes the picked profile out of the list; asks on the confirm strip, and the server hears of it with Save all."}},
+        {"label": {"name": "RadHint", "at": [216, 514], "size": [299, 32], "text": "", "font": "small", "color": "$vppMuted"}}
+      ]}}
+    ]}}
+  ]}}
+}

@@ -25,6 +25,9 @@ mods = ["OpenZone_Radio", "OpenZone_Radio_PDA", "OpenZone_Radio_VPP"]
 # під'єднує туди data\ з мода та ванільний dz\. Збірка однієї моделі:
 # asset_build(mod="OpenZone_Radio", source="model/<рація>").
 project_root = "build/model-root"
+# Layout tokens: ui/tokens.json, the default path, so no `tokens` key here. The PDA and
+# the trader layer their own file over the core's (a list); the radio's file is a copy
+# of what its VPP page takes from the core's tokens -- the note in it says which.
 
 [expect]
 ready_line   = "radio loaded"
