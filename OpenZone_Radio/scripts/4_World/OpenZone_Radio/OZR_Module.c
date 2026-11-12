@@ -108,6 +108,9 @@ class OZR_Module : CF_ModuleWorld
         summary += " profiles=" + profiles.ToString();
         OZR_Log.Info(summary);
 
+        // The radio's card on Ядро › Огляд (VPP rework 2026-11-12, design 4.3).
+        OZ_AdminFacts.Register(new OZR_Facts());
+
         // Дебаг-режим лагів -- ПІСЛЯ рядка готовності, щоб вердикт стенда не
         // чекав два мільйони викликів самоперевірки.
         OZR_Settings st = OZR_Settings.Get();

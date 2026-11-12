@@ -62,6 +62,33 @@ class OZR_ConfigBase
     void Validate(out int warnings) { warnings = 0; }
 }
 
+// Problems of the last load per file (VPP rework 2026-11-12, design 4.3): what Validate
+// fixed or warned about, plus one for a file that could not be used. The radio's card on
+// Ядро › Огляд sums its files (OZR_Facts). The core keeps the same table for its own
+// loader (OZ_ConfigProblems); this copy keeps the loader above free of the core, as the
+// header says.
+class OZR_CfgProblems
+{
+    // Made on first use, not in the declaration: a static's initialiser has been seen not
+    // to run once (the PDA's OZ_PdaProfiles notes it).
+    private static ref map<string, int> s_Of;
+
+    static void Record(string tag, int found)
+    {
+        if (!s_Of)
+            s_Of = new map<string, int>();
+        s_Of.Set(tag, found);
+    }
+
+    static int Of(string tag)
+    {
+        int found = 0;
+        if (!s_Of || !s_Of.Find(tag, found))
+            return 0;
+        return found;
+    }
+}
+
 class OZR_ConfigLoader<Class T>
 {
     // cfg ПРИХОДИТЬ УЖЕ СТВОРЕНИМ, і це не стиль, а обмеження мови: `new T()`
@@ -145,6 +172,11 @@ class OZR_ConfigLoader<Class T>
 
         if (fresh)
             Save(path, tag, cfg);
+
+        int found = warnings;
+        if (!understood)
+            found++;
+        OZR_CfgProblems.Record(tag, found);
 
         return understood;
     }
