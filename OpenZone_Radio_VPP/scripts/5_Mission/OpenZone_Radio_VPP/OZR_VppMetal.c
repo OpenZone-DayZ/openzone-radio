@@ -11,14 +11,14 @@
 class OZR_VppMetal
 {
     // --- text
-    static const int TEXT   = ARGB(255, 224, 223, 218);   // vppText    0.88  0.875 0.855
-    static const int MUTED  = ARGB(255, 160, 159, 153);   // vppMuted   0.627 0.624 0.6
-    static const int FAINT  = ARGB(255,  92,  90,  88);   // vppFaint   0.36  0.353 0.345
+    static const int TEXT   = 0xFFE0DFDA;   // vppText    0.88  0.875 0.855
+    static const int MUTED  = 0xFFA09F99;   // vppMuted   0.627 0.624 0.6
+    static const int FAINT  = 0xFF5C5A58;   // vppFaint   0.36  0.353 0.345
 
     // --- states
-    static const int ALERT  = ARGB(255, 245, 199,  64);   // vppAlert   0.96  0.78  0.25
-    static const int OK     = ARGB(255, 102, 199,  92);   // vppOk      0.4   0.78  0.36
-    static const int BAD    = ARGB(255, 224,  82,  74);   // vppBad     0.88  0.32  0.29
+    static const int ALERT  = 0xFFF5C740;   // vppAlert   0.96  0.78  0.25
+    static const int OK     = 0xFF66C75C;   // vppOk      0.4   0.78  0.36
+    static const int BAD    = 0xFFE0524A;   // vppBad     0.88  0.32  0.29
 }
 
 #endif

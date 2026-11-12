@@ -8,7 +8,7 @@
         {"label": {"name": "OzrHeadSub", "at": [24, 35], "size": [560, 18], "text": "#STR_OZR_VPP_SUB", "font": "small", "color": "$vppMuted"}},
         {"button": {"name": "BtnRadReload", "at": [320, 15], "size": [130, 30], "text": "#STR_OZ_VPP_RELOAD", "bg": "$vppRaised", "edge": "$vppEdge", "color": "$vppText", "font": "small", "anchor": "right", "note": "Reads the profiles from the server again; with unsaved edits it asks first."}},
         {"button": {"name": "BtnRadCheck", "at": [182, 15], "size": [130, 30], "text": "#STR_OZR_VPP_CHECK", "bg": "$vppRaised", "edge": "$vppEdge", "color": "$vppText", "font": "small", "anchor": "right", "note": "Recounts the checks and the ether from the fields as they are typed now."}},
-        {"button": {"name": "BtnRadSave", "at": [24, 15], "size": [150, 30], "text": "#STR_OZR_VPP_SAVE_ALL", "bg": "$vppAccent", "edge": "$vppAccent", "color": "$vppScreen", "font": "small", "anchor": "right", "note": "Writes every profile to the server: asks on the window's confirm strip."}},
+        {"button": {"name": "BtnRadSave", "at": [24, 15], "size": [150, 30], "text": "#STR_OZR_VPP_SAVE_ALL", "bg": "$vppAccent", "edge": "$vppAccent", "color": "$vppText", "font": "small", "anchor": "right", "note": "Writes every profile to the server: asks on the window's confirm strip."}},
         {"panel": {"name": "OzrHeadRule", "at": [0, 59], "size": [1060, 1], "color": "$vppEdge"}}
       ]}},
       {"label": {"name": "OzrColHead", "at": [24, 76], "size": [472, 18], "text": "#STR_OZR_VPP_COLS", "font": "small", "color": "$vppMuted"}},
