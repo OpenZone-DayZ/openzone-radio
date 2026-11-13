@@ -55,3 +55,10 @@ models/assets/*/textures/
 # Чужий рендер, лежить на цій машині лише як візуальний референс.
 models/assets/*/reference_*
 *.blend1
+
+# css2layout: previews and measurements, never packed or committed
+_demo_*.layout
+ui/css2layout/*.measure.json
+ui/css2layout/icons.json
+ui/css2layout/icons.png
+ui/css2layout/chrome_profile*/

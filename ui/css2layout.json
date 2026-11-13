@@ -1,0 +1,33 @@
+{
+  "note": "The pages of this mod in the OpenZone window of VPP, converted from the mockup (docs/specs/2026-11-12-openzone-vpp-mockup/project) by `python -m dayz_mcp.css2layout ui/css2layout.json [page] [--demo]` (the MCP repository's src). The fonts, the icons and how to mark a page: the core's ui/css2layout.json and docs/specs/2026-11-13-openzone-vpp-page-guide.md.",
+  "extends": "../../openzone-core/ui/css2layout.json",
+  "out": "../OpenZone_Radio_VPP/gui/layouts",
+  "prefix": "OpenZone_Radio_VPP/gui/layouts",
+  "report": "css2layout",
+  "runtime": null,
+  "strings": {
+    "files": [
+      "../OpenZone_Radio/stringtable.csv"
+    ],
+    "column": "original",
+    "fold": {
+      "І": "I"
+    },
+    "pending": [
+      "css2layout/strings.pending.json"
+    ]
+  },
+  "pages": {
+    "profiles": {
+      "page": "RadioProfiles.dc.html",
+      "size": [
+        1360,
+        812
+      ],
+      "layout": "ozr_vpp_pane",
+      "root": "OzrPane",
+      "auto": "rp",
+      "hidden": true
+    }
+  }
+}

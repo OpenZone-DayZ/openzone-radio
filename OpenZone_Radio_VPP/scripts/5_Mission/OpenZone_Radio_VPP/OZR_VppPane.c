@@ -1,8 +1,12 @@
 // Сторінка «Профілі рацій» модуля «Рація» в адмінському вікні OpenZone (VPP rework
 // 2026-11-12, design 5.4): профілі ручних рацій списком і карткою вибраного. Чіпляється
-// до вікна ядра через modded class -- ядро про рацію не знає й знати не мусить. Розмітка
-// -- з опису ui/OpenZone_Radio_VPP/ozr_vpp_pane.json (до 2026-11-12 це була єдина
-// написана руками розмітка вікна).
+// до вікна ядра через modded class -- ядро про рацію не знає й знати не мусить.
+//
+// The layout is converted from the mockup's board RadioProfiles.dc.html (css2layout,
+// 2026-11-13; docs/specs/2026-11-13-openzone-vpp-page-guide.md): it carries its own
+// colours and follows the window by itself. What this file names is in the report
+// ui/css2layout/ozr_vpp_pane.txt; the list is rows made from the template
+// ozr_vpp_profile_row.layout.
 //
 // Гарди: NO_GUI -- сервер компілює Mission без UI; AVPPAdminTools і OpenZone_VPP --
 // імена класів CfgMods (їх авто-дефайнить рушій).
@@ -15,7 +19,7 @@
 //
 //   1. ЕФІР МІНЯЄТЬСЯ ВІД ОДНОГО ЧИСЛА. Дрібніший крок в одній рації подрібнює крок
 //      УСЬОГО ефіру, бо НСД падає; ширша смуга розсуває його межі. Сторінка показує,
-//      яким ефір СТАНЕ, ще до збереження.
+//      яким ефір СТАНЕ, ще до збереження -- і поки адмін набирає числа.
 //   2. Є СТЕЛЯ, і вона не з рушія, а з рішення власника (2026-09-01, ТЗ-5 R-E4): 65536
 //      ділень ефіру. Ефір, якому треба більше, сервер відхилить -- тож сторінка каже про
 //      це ДО збереження, з числом, якого не вистачило.
@@ -28,13 +32,16 @@
 // читає сам рушій, а скрипту доступні лише ConfigGetFloat і рідня -- жодного ConfigSet
 // у грі немає. Тому поле показує справжнє число з конфігу класу і мовчить.
 //
-// Чернетка: NEW і DELETE міняють список на сторінці, поля -- вибраний профіль; на
-// сервер усе йде одним файлом кнопкою «Зберегти все», через смугу підтвердження вікна
-// (design 3.4), як і видалення, і відкидання незбережених правок (D106: перейти на
-// інший рядок, NEW, перечитати). «Так» вертається в OnConfirmed дією "ozr:".
+// Чернетка: «Новий профіль» і «Видалити профіль» міняють список на сторінці, поля --
+// вибраний профіль; на сервер усе йде одним файлом кнопкою «Зберегти все», через смугу
+// підтвердження вікна (design 3.4), як і видалення, і відкидання незбережених правок
+// (D106: перейти на інший рядок, новий профіль, перечитати). «Так» вертається в
+// OnConfirmed дією "ozr:". What the page says goes to the window's journal and its
+// status bar (Hint).
 //
 // Члени цього шару починаються з Ozr (поля -- m_Ozr): той самий клас модифікує кожна
-// склейка, і ім'я, яке мають двоє, не компілюється.
+// склейка, і ім'я, яке мають двоє, не компілюється. Fields are declared bare and set in
+// OnCreate (dayz-modding enforce-script.md, field initialisers).
 
 #ifdef AVPPAdminTools
 #ifdef OpenZone_VPP
@@ -44,16 +51,44 @@ modded class OZ_VppAdminMenu
 {
     static const string OZR_PAGE = "radio.profiles";
 
-    // The profiles as the page holds them: the server's file, with NEW and DELETE laid
-    // over it until Save all sends it.
+    // Numbers of the converted layout, in layout units. The engine does not read the
+    // board, so they live twice: convert the page again, check these against its layout.
+    // A row of the list; the warning's two parts (where the first starts, their line's
+    // top and height); a caption over a box's border (its room left and right of the
+    // words, the height of its ground and of its line).
+    static const float OZR_ROW_W     = 487;
+    static const float OZR_ROW_H     = 42;
+    static const float OZR_WARN_X    = 41;
+    static const float OZR_WARN_Y    = 12;
+    static const float OZR_WARN_H    = 17;
+    static const float OZR_LEG_PAD   = 6;
+    static const float OZR_LEG_BAR_H = 8;
+    static const float OZR_LEG_H     = 15;
+
+    // The list shows this many profiles; the journal says when the file holds more.
+    static const int OZR_ROWS_MAX = 200;
+
+    // How a check stands: nothing to check, passed, true only after the restart, failed.
+    static const int OZR_CHECK_NONE = 0;
+    static const int OZR_CHECK_OK   = 1;
+    static const int OZR_CHECK_WAIT = 2;
+    static const int OZR_CHECK_BAD  = 3;
+
+    // The pane, as created.
+    private Widget m_OzrPane;
+    // The profiles as the page holds them: the server's file, with new and deleted ones
+    // laid over it until Save all sends it.
     private ref OZR_Profiles m_OzrCfg;
-    // The picked row: an index of m_OzrCfg.Radios, -1 for none.
-    private int  m_OzrPicked = -1;
-    // NEW or DELETE changed the list since the server's file.
-    private bool m_OzrDraft = false;
-    // Rebuilding the list selects a row; the OnItemSelected that comes of it is not a
-    // pick (the same flag the core and the other pages keep).
-    private bool m_OzrRepaint = false;
+    // The list's rows; a row's key is its profile's index in m_OzrCfg.Radios.
+    private ref OZ_VppFlexRows m_OzrRows;
+    // The picked profile: an index of m_OzrCfg.Radios, -1 for none.
+    private int  m_OzrPicked;
+    // A new or a deleted profile changed the list since the server's file.
+    private bool m_OzrDraft;
+    // The script writes the fields: an OnChange that comes of it is not typing.
+    private bool m_OzrFill;
+    // What is fitted to its words waits for the page to be on screen: frames left to try.
+    private int  m_OzrFitTries;
 
     override void OnCreate(Widget RootW)
     {
@@ -61,15 +96,28 @@ modded class OZ_VppAdminMenu
         if (!M_SUB_WIDGET)
             return;
 
-        Widget pane = GetGame().GetWorkspace().CreateWidgets("OpenZone_Radio_VPP/gui/layouts/ozr_vpp_pane.layout", M_SUB_WIDGET);
-        if (!pane)
+        m_OzrPicked = -1;
+        m_OzrDraft = false;
+        m_OzrFill = false;
+        m_OzrFitTries = 0;
+
+        m_OzrPane = OZ_VppFlex.Create("OpenZone_Radio_VPP/gui/layouts/ozr_vpp_pane.layout", M_SUB_WIDGET, "OzrPane");
+        if (!m_OzrPane)
         {
             OZR_Log.Error("radio vpp page: layout failed to load");
             return;
         }
 
-        // The page names its hint line itself: the core knows no glue's widgets.
-        RegisterPage("radio", "#STR_OZR_VPP_MOD", OZR_PAGE, "#STR_OZR_VPP_PAGE_PROFILES", pane, "RadHint");
+        // No hint label of its own: the page's lines go to the journal, and the status
+        // bar shows the newest.
+        RegisterPage("radio", "#STR_OZR_VPP_MOD", OZR_PAGE, "#STR_OZR_VPP_PAGE_PROFILES", m_OzrPane, "");
+
+        Widget host = m_OzrPane.FindAnyWidget("OzrListRows");
+        if (host)
+            m_OzrRows = new OZ_VppFlexRows(m_Flex, host, "OpenZone_Radio_VPP/gui/layouts/ozr_vpp_profile_row.layout", "OZR_VppProfileRow", OZR_ROW_W, OZR_ROW_H);
+        else
+            OZR_Log.Error("radio vpp page: the list has no OzrListRows");
+
         OzrPaintCard();
     }
 
@@ -83,6 +131,7 @@ modded class OZ_VppAdminMenu
         if (!OzrUnsaved())
             AskCfg(OZR_VppModule.CFG_PROFILES);
         OzrPaintCard();
+        m_OzrFitTries = 30;
     }
 
     // Every name goes on to super: Ядро › Файли конфігів shows the same file raw, and
@@ -134,6 +183,86 @@ modded class OZ_VppAdminMenu
             OzrSwitchNow(action.Substring(11, action.Length() - 11));
     }
 
+    // Every frame while the window is open: what waits to be fitted to its words.
+    override void Tick()
+    {
+        super.Tick();
+        if (m_OzrFitTries > 0)
+            OzrFitTick();
+    }
+
+    // The captions over the boxes' borders and the warning's two parts are as wide as
+    // their words in the game's language. A text measures only once it is on screen, so
+    // the page is tried for a few frames after it is shown.
+    private void OzrFitTick()
+    {
+        m_OzrFitTries = m_OzrFitTries - 1;
+        if (m_Shown != OZR_PAGE)
+        {
+            m_OzrFitTries = 0;
+            return;
+        }
+
+        bool done = true;
+        if (!OzrFitLegend("OzrLegProfile"))
+            done = false;
+        if (!OzrFitLegend("OzrLegEther"))
+            done = false;
+        if (!OzrFitLegend("OzrLegCheck"))
+            done = false;
+        if (!OzrFlowWarn())
+            done = false;
+
+        if (done)
+            m_OzrFitTries = 0;
+    }
+
+    // One caption over a border: its ground (<name>Bar hides the border under the words)
+    // and its line (<name>Text) as wide as the words. False: the words do not measure yet.
+    private bool OzrFitLegend(string name)
+    {
+        if (!m_OzrPane)
+            return true;
+        Widget bar = m_OzrPane.FindAnyWidget(name + "Bar");
+        TextWidget t = TextWidget.Cast(m_OzrPane.FindAnyWidget(name + "Text"));
+        if (!bar || !t)
+            return true;
+
+        int tw = OZ_VppFlex.TextWidth(t);
+        if (tw <= 0)
+            return false;
+
+        float s = UnitScale();
+        bar.SetSize(tw + 2 * OZR_LEG_PAD * s, OZR_LEG_BAR_H * s);
+        t.SetSize(tw + 2, OZR_LEG_H * s);
+        return true;
+    }
+
+    // The warning is two captions, the first in bold: the second begins a word's gap
+    // after the first ends, whatever the language. False: the words do not measure yet.
+    private bool OzrFlowWarn()
+    {
+        if (!m_OzrPane)
+            return true;
+        TextWidget first = TextWidget.Cast(m_OzrPane.FindAnyWidget("OzrWarnA"));
+        TextWidget second = TextWidget.Cast(m_OzrPane.FindAnyWidget("OzrWarnB"));
+        if (!first || !second)
+            return true;
+        if (!first.IsVisibleHierarchy())
+            return true;
+
+        int firstW = OZ_VppFlex.TextWidth(first);
+        int secondW = OZ_VppFlex.TextWidth(second);
+        if (firstW <= 0 || secondW <= 0)
+            return false;
+
+        float s = UnitScale();
+        first.SetSize(firstW + 2, OZR_WARN_H * s);
+        second.SetPos(OZR_WARN_X * s + firstW + 4 * s, OZR_WARN_Y * s);
+        second.SetSize(secondW + 2, OZR_WARN_H * s);
+        return true;
+    }
+
     // ------------------------------------------------------------ файл
 
     private void OzrOnProfilesText(string body)
@@ -179,10 +308,35 @@ modded class OZ_VppAdminMenu
             Hint("#STR_OZR_VPP_H_LOADED");
     }
 
+    // ------------------------------------------------------------ числа
+
+    // A number as the page shows it: OZR_Fmt's, less the zeros at its end past the second
+    // place ("136.000" is "136.00", "0.0500" is "0.05", "0.0125" stays). Nothing is
+    // rounded: the fields take the same words back.
+    private string OzrShort(string num)
+    {
+        int dot = num.IndexOf(".");
+        if (dot < 0)
+            return num;
+        int n = num.Length();
+        while (n > dot + 3 && num.Substring(n - 1, 1) == "0")
+            n = n - 1;
+        return num.Substring(0, n);
+    }
+
+    private string OzrMHz(float mhz)
+    {
+        return OzrShort(OZR_Fmt.MHz(mhz));
+    }
+
+    private string OzrStepText(float mhz)
+    {
+        return OzrShort(OZR_Fmt.Step(mhz));
+    }
+
     // ------------------------------------------------------------ сітка
 
-    // "136.000 - 155.950 MHz, step 0.0500, 400 divisions" -- in the admin's language. The
-    // numbers are OZR_Fmt's, the ones the fields and the server's log show.
+    // "136.00–155.95 МГц, крок 0.05, 400 поділок" -- in the admin's language.
     private string OzrGridText(float baseMHz, float step, int count)
     {
         if (count < 1)
@@ -193,11 +347,11 @@ modded class OZ_VppAdminMenu
         string divs = Widget.TranslateString("#STR_OZR_VPP_DIVISIONS");
         float top = baseMHz + (count - 1) * step;
 
-        string s = OZR_Fmt.MHz(baseMHz) + " - " + OZR_Fmt.MHz(top);
-        s = s + " " + mhz + ", " + stepWord;
-        s = s + " " + OZR_Fmt.Step(step) + ", ";
-        s = s + count.ToString() + " " + divs;
-        return s;
+        string text = OzrMHz(baseMHz) + "–" + OzrMHz(top);
+        text = text + " " + mhz + ", " + stepWord;
+        text = text + " " + OzrStepText(step) + ", ";
+        text = text + count.ToString() + " " + divs;
+        return text;
     }
 
     // The ether now: what the server sent with the core's sync packet.
@@ -205,11 +359,11 @@ modded class OZ_VppAdminMenu
     {
         if (!OZR_ClientGrid.Ready())
         {
-            OzrSay("RadGrid", "#STR_OZR_VPP_NO_GRID", OZR_VppMetal.MUTED);
+            OzrSay("RadGrid", "#STR_OZR_VPP_NO_GRID", ARGB(255, 160, 159, 153));
             return;
         }
         string now = OzrGridText(OZR_ClientGrid.BaseMHz(), OZR_ClientGrid.StepMHz(), OZR_ClientGrid.Count());
-        OzrSay("RadGrid", now, OZR_VppMetal.TEXT);
+        OzrSay("RadGrid", now, ARGB(255, 224, 223, 218));
     }
 
     // The profiles as they would be sent: copies, the picked one from the fields. The
@@ -271,60 +425,102 @@ modded class OZ_VppAdminMenu
         return OzrGridText(plan.BaseMHz, plan.StepMHz, plan.Count);
     }
 
+    // The second line of the ether box, and under it the warning while the ether after
+    // a restart is another than the one that runs.
     private void OzrPaintEther()
     {
         OZR_EtherPlan plan = OzrPlanned();
         bool warn = false;
-        int ink = OZR_VppMetal.MUTED;
+        int ink = ARGB(255, 160, 159, 153);
         if (plan && !plan.Ok)
-            ink = OZR_VppMetal.BAD;
+            ink = ARGB(255, 224, 82, 74);
         else if (plan && OzrSameAsRunning(plan))
-            ink = OZR_VppMetal.OK;
+            ink = ARGB(255, 102, 199, 92);
         else if (plan)
         {
-            ink = OZR_VppMetal.ALERT;
+            ink = ARGB(255, 245, 199, 64);
             warn = true;
         }
         string afterText = OzrPlanText(plan);
         OzrSay("RadEther", afterText, ink);
         OzrShow("OzrWarn", warn);
+        if (warn && !OzrFlowWarn())
+            m_OzrFitTries = 30;
     }
 
     // ------------------------------------------------------------ список
 
+    // A row per profile: its class, its band and step, the range its item's config gives.
     private void OzrRebuildList()
     {
-        TextListboxWidget lb = TextListboxWidget.Cast(M_SUB_WIDGET.FindAnyWidget("RadList"));
-        if (!lb || !m_OzrCfg)
+        if (!m_OzrRows || !m_OzrCfg)
             return;
 
-        m_OzrRepaint = true;
-        lb.ClearItems();
-        for (int i = 0; i < m_OzrCfg.Radios.Count(); i++)
+        int cInk = ARGB(255, 224, 223, 218);
+        int cMuted = ARGB(255, 160, 159, 153);
+
+        m_OzrRows.Clear();
+        Widget row;
+        OZR_RadioProfile p;
+        string band;
+        int total = m_OzrCfg.Radios.Count();
+        for (int i = 0; i < total && i < OZR_ROWS_MAX; i++)
         {
-            OZR_RadioProfile p = m_OzrCfg.Radios[i];
-            string line = OzrRowName(p);
-            line = line + "   " + OZR_Fmt.MHz(p.MinMHz);
-            line = line + "-" + OZR_Fmt.MHz(p.MaxMHz);
-            line = line + " / " + OZR_Fmt.Step(p.StepMHz);
-            line = line + "   " + OzrRangeOf(p.ClassName);
-            lb.AddItem(line, NULL, 0);
+            p = m_OzrCfg.Radios[i];
+            row = m_OzrRows.Add(i.ToString());
+            if (!row)
+                continue;
+            band = OzrMHz(p.MinMHz) + "–" + OzrMHz(p.MaxMHz);
+            band = band + " / " + OzrStepText(p.StepMHz);
+            OzrRowText(row, "OzrRowCls", OzrRowName(p), cInk);
+            OzrRowText(row, "OzrRowBand", band, cInk);
+            OzrRowText(row, "OzrRowRange", OzrRangeOf(p.ClassName), cMuted);
         }
-        m_OzrRepaint = false;
-        OzrSelectPicked();
+        m_OzrRows.Fit();
+        OzrMarkRows();
+
+        int most = OZR_ROWS_MAX;
+        if (total > most && CurrentPane() == OZR_PAGE)
+        {
+            string cutWord = Widget.TranslateString("#STR_OZR_VPP_H_CUT");
+            string cut = cutWord + " " + most.ToString();
+            cut = cut + " / " + total.ToString();
+            Hint(cut);
+        }
     }
 
-    private void OzrSelectPicked()
+    // The picked profile's row is lit (the accent's frame and soft ground, as the
+    // template carries them); the others lie on the list's plain ground.
+    private void OzrMarkRows()
     {
-        TextListboxWidget lb = TextListboxWidget.Cast(M_SUB_WIDGET.FindAnyWidget("RadList"));
-        if (!lb)
+        if (!m_OzrRows)
             return;
-        m_OzrRepaint = true;
+
+        int cAccent = ARGB(255, 232, 120, 43);
+        int cPicked = ARGB(255, 47, 29, 17);
+        int cHead = ARGB(255, 19, 19, 18);
+
+        string pick = "";
         if (m_OzrCfg && m_OzrPicked >= 0 && m_OzrPicked < m_OzrCfg.Radios.Count())
-            lb.SelectRow(m_OzrPicked);
-        else
-            lb.SelectRow(-1);
-        m_OzrRepaint = false;
+            pick = m_OzrPicked.ToString();
+
+        Widget row;
+        for (int i = 0; i < m_OzrRows.Count(); i++)
+        {
+            row = m_OzrRows.Row(i);
+            if (!row)
+                continue;
+            if (pick != "" && m_OzrRows.Key(i) == pick)
+            {
+                OZ_VppFlex.Paint(row, "OZR_VppProfileRowEdge", cAccent);
+                OZ_VppFlex.Paint(row, "OZR_VppProfileRowBg", cPicked);
+            }
+            else
+            {
+                OZ_VppFlex.Paint(row, "OZR_VppProfileRowEdge", cHead);
+                OZ_VppFlex.Paint(row, "OZR_VppProfileRowBg", cHead);
+            }
+        }
     }
 
     // The class, or "(new)" for a profile that has none yet.
@@ -377,11 +573,11 @@ modded class OZ_VppAdminMenu
         OZR_RadioProfile p = m_OzrCfg.Radios[m_OzrPicked];
         if (OzrTrimmed("RadF_Class") != p.ClassName)
             return true;
-        if (OzrTrimmed("RadF_Min") != OZR_Fmt.MHz(p.MinMHz))
+        if (OzrTrimmed("RadF_Min") != OzrMHz(p.MinMHz))
             return true;
-        if (OzrTrimmed("RadF_Max") != OZR_Fmt.MHz(p.MaxMHz))
+        if (OzrTrimmed("RadF_Max") != OzrMHz(p.MaxMHz))
             return true;
-        string step = OZR_Fmt.Step(p.StepMHz);
+        string step = OzrStepText(p.StepMHz);
         return OzrTrimmed("RadF_Step") != step;
     }
 
@@ -405,7 +601,7 @@ modded class OZ_VppAdminMenu
     }
 
     // UNSAVED EDITS ARE NOT LOST SILENTLY (D106): another row asks on the confirm strip
-    // first, and the list keeps its highlight on the profile being edited meanwhile.
+    // first, and the list keeps its light on the profile being edited meanwhile.
     private void OzrPick(int row)
     {
         if (!m_OzrCfg || row < 0 || row >= m_OzrCfg.Radios.Count() || row == m_OzrPicked)
@@ -415,7 +611,6 @@ modded class OZ_VppAdminMenu
         {
             string text = OzrDropQuestion();
             Confirm(text, "#STR_OZR_VPP_YES_DROP", "ozr:switch:" + row.ToString());
-            OzrSelectPicked();
             return;
         }
         OzrFill(row);
@@ -436,22 +631,26 @@ modded class OZ_VppAdminMenu
 
         m_OzrPicked = row;
         OZR_RadioProfile p = m_OzrCfg.Radios[row];
+        m_OzrFill = true;
         SetEdit("RadF_Class", p.ClassName);
-        SetEdit("RadF_Min",   OZR_Fmt.MHz(p.MinMHz));
-        SetEdit("RadF_Max",   OZR_Fmt.MHz(p.MaxMHz));
-        SetEdit("RadF_Step",  OZR_Fmt.Step(p.StepMHz));
-        OzrSelectPicked();
+        SetEdit("RadF_Min",   OzrMHz(p.MinMHz));
+        SetEdit("RadF_Max",   OzrMHz(p.MaxMHz));
+        SetEdit("RadF_Step",  OzrStepText(p.StepMHz));
+        m_OzrFill = false;
+        OzrMarkRows();
         OzrPaintCard();
     }
 
     private void OzrClearForm()
     {
         m_OzrPicked = -1;
+        m_OzrFill = true;
         SetEdit("RadF_Class", "");
         SetEdit("RadF_Min",   "");
         SetEdit("RadF_Max",   "");
         SetEdit("RadF_Step",  "");
-        OzrSelectPicked();
+        m_OzrFill = false;
+        OzrMarkRows();
         OzrPaintCard();
     }
 
@@ -459,7 +658,7 @@ modded class OZ_VppAdminMenu
 
     private void OzrPaintCard()
     {
-        if (!M_SUB_WIDGET)
+        if (!m_OzrPane)
             return;
 
         bool picked = false;
@@ -469,10 +668,10 @@ modded class OZ_VppAdminMenu
         if (picked)
         {
             string title = OzrRowName(m_OzrCfg.Radios[m_OzrPicked]);
-            OzrSay("OzrCardTitle", title, OZR_VppMetal.TEXT);
+            OzrSay("OzrCardTitle", title, ARGB(255, 224, 223, 218));
         }
         else
-            OzrSay("OzrCardTitle", "#STR_OZR_VPP_PICK", OZR_VppMetal.MUTED);
+            OzrSay("OzrCardTitle", "#STR_OZR_VPP_PICK", ARGB(255, 160, 159, 153));
         OzrShow("BtnRadDel", picked);
 
         OzrPaintGrid();
@@ -484,25 +683,31 @@ modded class OZ_VppAdminMenu
     // reach as far as the page says.
     private void OzrPaintRange(string cls)
     {
+        int cInk = ARGB(255, 224, 223, 218);
+        int cMuted = ARGB(255, 160, 159, 153);
+        int cAlert = ARGB(255, 245, 199, 64);
+
         if (cls == "")
         {
-            OzrSay("RadF_Range", "-", OZR_VppMetal.MUTED);
-            OzrSay("OzrRangeH", "#STR_OZR_VPP_F_RANGE_HINT", OZR_VppMetal.MUTED);
+            OzrSay("RadF_Range", "-", cMuted);
+            OzrSay("OzrRangeH", "#STR_OZR_VPP_F_RANGE_HINT", cMuted);
             return;
         }
         string range = OzrRangeOf(cls);
         if (range == "?")
         {
-            OzrSay("RadF_Range", "?", OZR_VppMetal.ALERT);
-            OzrSay("OzrRangeH", "#STR_OZR_VPP_NO_RANGE", OZR_VppMetal.ALERT);
+            OzrSay("RadF_Range", "?", cAlert);
+            OzrSay("OzrRangeH", "#STR_OZR_VPP_NO_RANGE", cAlert);
             return;
         }
-        OzrSay("RadF_Range", range, OZR_VppMetal.TEXT);
-        OzrSay("OzrRangeH", "#STR_OZR_VPP_F_RANGE_HINT", OZR_VppMetal.MUTED);
+        OzrSay("RadF_Range", range, cInk);
+        OzrSay("OzrRangeH", "#STR_OZR_VPP_F_RANGE_HINT", cMuted);
     }
 
-    // One line of the checks and the dot before it.
-    private void OzrCheck(int i, string text, int dot)
+    // One line of the checks and the sign before it: a check mark, a ring for what is
+    // true only after the restart, a cross, a faint dot when there is nothing to check;
+    // an empty line has no sign.
+    private void OzrCheck(int i, string text, int state)
     {
         string name = "RadF_Fit2";
         if (i == 0)
@@ -510,11 +715,36 @@ modded class OZ_VppAdminMenu
         else if (i == 1)
             name = "RadF_Fit1";
 
-        int ink = OZR_VppMetal.TEXT;
-        if (dot == OZR_VppMetal.FAINT)
-            ink = OZR_VppMetal.MUTED;
+        int ink = ARGB(255, 224, 223, 218);
+        int tint = ARGB(255, 102, 199, 92);
+        string image = "check";
+        if (state == OZR_CHECK_NONE)
+        {
+            ink = ARGB(255, 160, 159, 153);
+            tint = ARGB(255, 92, 90, 88);
+            image = "dot";
+        }
+        else if (state == OZR_CHECK_WAIT)
+        {
+            tint = ARGB(255, 245, 199, 64);
+            image = "ring";
+        }
+        else if (state == OZR_CHECK_BAD)
+        {
+            tint = ARGB(255, 224, 82, 74);
+            image = "cross";
+        }
         OzrSay(name, text, ink);
-        OzrColor("OzrDot" + i.ToString(), dot);
+
+        if (!m_OzrPane)
+            return;
+        ImageWidget sign = ImageWidget.Cast(m_OzrPane.FindAnyWidget("OzrDot" + i.ToString()));
+        if (!sign)
+            return;
+        sign.Show(text != "");
+        sign.LoadImageFile(0, "set:ozv_ui image:" + image);
+        sign.SetImage(0);
+        sign.SetColor(tint);
     }
 
     // Counted from the FIELDS, not from the saved profile: the point is to see the result
@@ -531,16 +761,16 @@ modded class OZ_VppAdminMenu
         // An empty field is no error, it is "not filled yet": nobody typed the zero.
         if (lo <= 0 || hi <= 0 || step <= 0)
         {
-            OzrCheck(0, "-", OZR_VppMetal.FAINT);
-            OzrCheck(1, "#STR_OZR_VPP_EMPTY_FORM", OZR_VppMetal.FAINT);
-            OzrCheck(2, "", OZR_VppMetal.FAINT);
+            OzrCheck(0, "-", OZR_CHECK_NONE);
+            OzrCheck(1, "#STR_OZR_VPP_EMPTY_FORM", OZR_CHECK_NONE);
+            OzrCheck(2, "", OZR_CHECK_NONE);
             return;
         }
         if (hi <= lo)
         {
-            OzrCheck(0, "-", OZR_VppMetal.BAD);
-            OzrCheck(1, "#STR_OZR_VPP_HI_LO", OZR_VppMetal.BAD);
-            OzrCheck(2, "", OZR_VppMetal.FAINT);
+            OzrCheck(0, "-", OZR_CHECK_BAD);
+            OzrCheck(1, "#STR_OZR_VPP_HI_LO", OZR_CHECK_BAD);
+            OzrCheck(2, "", OZR_CHECK_NONE);
             return;
         }
 
@@ -548,9 +778,9 @@ modded class OZ_VppAdminMenu
         OZR_EtherPlan plan = OzrPlanned();
         if (!plan || !plan.Ok)
         {
-            OzrCheck(0, "-", OZR_VppMetal.BAD);
-            OzrCheck(1, "#STR_OZR_VPP_NO_PLAN", OZR_VppMetal.BAD);
-            OzrCheck(2, "", OZR_VppMetal.FAINT);
+            OzrCheck(0, "-", OZR_CHECK_BAD);
+            OzrCheck(1, "#STR_OZR_VPP_NO_PLAN", OZR_CHECK_BAD);
+            OzrCheck(2, "", OZR_CHECK_NONE);
             return;
         }
 
@@ -563,17 +793,17 @@ modded class OZ_VppAdminMenu
         string fromWord = Widget.TranslateString("#STR_OZR_VPP_FROM");
         string toWord = Widget.TranslateString("#STR_OZR_VPP_TO");
         string chan = chWord + " " + count.ToString();
-        chan = chan + "   " + fromWord;
-        chan = chan + " " + OZR_Fmt.MHz(lo);
+        chan = chan + " " + fromWord;
+        chan = chan + " " + OzrMHz(lo);
         chan = chan + " " + toWord;
-        chan = chan + " " + OZR_Fmt.MHz(hi);
-        OzrCheck(0, chan, OZR_VppMetal.OK);
+        chan = chan + " " + OzrMHz(hi);
+        OzrCheck(0, chan, OZR_CHECK_OK);
 
         string strideWord = Widget.TranslateString("#STR_OZR_VPP_STRIDE");
         string etherStep = Widget.TranslateString("#STR_OZR_VPP_ETHER_STEP");
         string every = strideWord + " " + stride.ToString();
-        every = every + " x " + etherStep;
-        OzrCheck(1, every, OZR_VppMetal.OK);
+        every = every + " × " + etherStep;
+        OzrCheck(1, every, OZR_CHECK_OK);
 
         // The one question that can still be answered "no": whether the profile works
         // NOW or only after the restart. The ether follows it either way, not this second.
@@ -581,7 +811,7 @@ modded class OZ_VppAdminMenu
         if (!OZR_ClientGrid.Ready())
         {
             string noGrid = Widget.TranslateString("#STR_OZR_VPP_NO_GRID");
-            OzrCheck(2, nowWord + " " + noGrid, OZR_VppMetal.FAINT);
+            OzrCheck(2, nowWord + " " + noGrid, OZR_CHECK_NONE);
             return;
         }
 
@@ -598,14 +828,14 @@ modded class OZ_VppAdminMenu
                 cHi = gHi;
             string clamp = Widget.TranslateString("#STR_OZR_VPP_NOW_CLAMP");
             string notNow = nowWord + " " + clamp;
-            notNow = notNow + " " + OZR_Fmt.MHz(cLo);
-            notNow = notNow + " - " + OZR_Fmt.MHz(cHi);
-            OzrCheck(2, notNow, OZR_VppMetal.ALERT);
+            notNow = notNow + " " + OzrMHz(cLo);
+            notNow = notNow + "–" + OzrMHz(cHi);
+            OzrCheck(2, notNow, OZR_CHECK_WAIT);
             return;
         }
 
         string yesWord = Widget.TranslateString("#STR_OZR_VPP_NOW_YES");
-        OzrCheck(2, nowWord + " " + yesWord, OZR_VppMetal.OK);
+        OzrCheck(2, nowWord + " " + yesWord, OZR_CHECK_OK);
     }
 
     // ------------------------------------------------------------ правки
@@ -618,7 +848,7 @@ modded class OZ_VppAdminMenu
             return;
         }
 
-        // NEW changes the picked profile too: unsaved edits are named first (D106).
+        // A new profile changes the picked one too: unsaved edits are named first (D106).
         if (OzrDirty())
         {
             string text = OzrDropQuestion();
@@ -828,7 +1058,7 @@ modded class OZ_VppAdminMenu
         SendCfg(OZR_VppModule.CFG_PROFILES, body);
         m_OzrDraft = false;
         OzrRebuildList();
-        // The fields as the list now has them ("136" becomes "136.000"): the answer's
+        // The fields as the list now has them ("136" becomes "136.00"): the answer's
         // read-back then finds nothing unsaved and shows the server's file.
         if (m_OzrPicked >= 0)
             OzrFill(m_OzrPicked);
@@ -852,79 +1082,63 @@ modded class OZ_VppAdminMenu
         return t.Trim();
     }
 
+    // A text of the page by its name: its words and its colour.
     private void OzrSay(string name, string text, int ink)
     {
-        TextWidget t = TextWidget.Cast(M_SUB_WIDGET.FindAnyWidget(name));
+        if (!m_OzrPane)
+            return;
+        TextWidget t = TextWidget.Cast(m_OzrPane.FindAnyWidget(name));
         if (!t)
             return;
         t.SetText(text);
         t.SetColor(ink);
     }
 
-    private void OzrColor(string name, int color)
+    // A text of a list's row.
+    private void OzrRowText(Widget row, string name, string text, int ink)
     {
-        Widget w = M_SUB_WIDGET.FindAnyWidget(name);
-        if (w)
-            w.SetColor(color);
+        TextWidget t = TextWidget.Cast(row.FindAnyWidget(name));
+        if (!t)
+            return;
+        t.SetText(text);
+        t.SetColor(ink);
     }
 
     private void OzrShow(string name, bool show)
     {
-        Widget w = M_SUB_WIDGET.FindAnyWidget(name);
+        if (!m_OzrPane)
+            return;
+        Widget w = m_OzrPane.FindAnyWidget(name);
         if (w)
             w.Show(show);
     }
 
-    private void OzrSize(string name, float w, float h)
-    {
-        Widget x = M_SUB_WIDGET.FindAnyWidget(name);
-        if (x)
-            x.SetSize(w, h);
-    }
-
-    private void OzrMove(string name, float x, float y)
-    {
-        Widget m = M_SUB_WIDGET.FindAnyWidget(name);
-        if (m)
-            m.SetPos(x, y);
-    }
-
     // ------------------------------------------------------------ розмір вікна
 
-    // The window changed size: the page is now w x h pixels. The head and its rule span
-    // it (the actions anchored to its right edge follow), the list takes the height and
-    // the button and the note under it move with its foot. Nothing is read back
-    // (dayz-modding gui-layouts §23a).
+    // The window changed size: the page follows by the rule its layout carries; the
+    // list's rows are made as wide as the list again.
     override void OnWindowResized(float w, float h)
     {
         super.OnWindowResized(w, h);
-        if (!M_SUB_WIDGET)
-            return;
-
-        float s = UnitScale();
-        OzrSize("OzrHead", w, 60 * s);
-        OzrSize("OzrHeadRule", w, s);
-        OzrSize("OzrDivider", s, h - 60 * s);
-
-        float listH = h - 234 * s;
-        if (listH < 60 * s)
-            listH = 60 * s;
-        OzrSize("RadList", 472 * s, listH);
-        OzrMove("BtnRadNew", 24 * s, listH + 110 * s);
-        OzrMove("OzrRangeNote", 24 * s, listH + 150 * s);
+        if (m_OzrRows)
+            m_OzrRows.Fit();
     }
 
     // ------------------------------------------------------------ ввід
 
-    override bool OnItemSelected(Widget w, int x, int y, int row, int column, int oldRow, int oldColumn)
+    // Typing in a field of the card: the checks and the ether after a restart follow it.
+    override bool OnChange(Widget w, int x, int y, bool finished)
     {
-        if (w && M_SUB_WIDGET && w.GetName() == "RadList")
+        if (w && M_SUB_WIDGET && !m_OzrFill)
         {
-            if (!m_OzrRepaint)
-                OzrPick(row);
-            return true;
+            string nm = w.GetName();
+            if (nm.IndexOf("RadF_") == 0)
+            {
+                OzrPaintChecks();
+                return true;
+            }
         }
-        return super.OnItemSelected(w, x, y, row, column, oldRow, oldColumn);
+        return super.OnChange(w, x, y, finished);
     }
 
     override bool OnClick(Widget w, int x, int y, int button)
@@ -964,6 +1178,17 @@ modded class OZ_VppAdminMenu
             }
             OzrReloadNow();
             return true;
+        }
+
+        // A row of the list: its profile on the card.
+        if (m_OzrRows)
+        {
+            int listRow = m_OzrRows.IndexOf(w);
+            if (listRow != -1)
+            {
+                OzrPick(m_OzrRows.Key(listRow).ToInt());
+                return true;
+            }
         }
 
         return super.OnClick(w, x, y, button);

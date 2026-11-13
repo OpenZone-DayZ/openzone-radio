@@ -56,3 +56,9 @@ noise        = ["Bridge.Url is not https"]
 [expect.counters]
 bands    = 400
 profiles = 7
+
+[client]
+# The client runs with -filePatching and mod_build keeps <game>/<Mod> as a junction to
+# the source tree, so an edited .layout of the admin page is read without repacking
+# (ui_preview; the stand config carries allowFilePatching = 1).
+file_patching = true

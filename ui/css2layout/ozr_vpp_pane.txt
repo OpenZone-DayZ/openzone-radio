@@ -1,0 +1,52 @@
+profiles: RadioProfiles.dc.html -> OpenZone_Radio_VPP/gui/layouts/ozr_vpp_pane.layout
+design size 1360 x 812, measured again one, two and three steps of 240 x 160 larger
+widgets: 97; 0 of them the browser re-flows as the page grows (the rule keeps them as designed)
+
+FILES
+  OpenZone_Radio_VPP/gui/layouts/ozr_vpp_pane.layout
+  OpenZone_Radio_VPP/gui/layouts/ozr_vpp_profile_row.layout
+
+NAMED WIDGETS OF THE PAGE (FindAnyWidget)
+  BtnRadNew  ButtonWidget (parts: BtnRadNewEdge, BtnRadNewBg)
+  BtnRadReload  ButtonWidget (parts: BtnRadReloadEdge, BtnRadReloadBg)
+  BtnRadCheck  ButtonWidget (parts: BtnRadCheckEdge, BtnRadCheckBg)
+  BtnRadSave  ButtonWidget (parts: BtnRadSaveBg)
+  OzrList  Frame
+  OzrListRows  WrapSpacer: the list's rows go here (ozr_vpp_profile_row); its ScrollWidget is OzrListScroll
+  OzrCardTitle  TextWidget (filled by script)
+  OzrLegProfile  Frame (parts: OzrLegProfileBar)
+  OzrLegProfileText  TextWidget (a caption: recolour only)
+  RadF_Class  EditBox
+  RadF_Range  TextWidget (filled by script)
+  OzrRangeH  TextWidget (filled by script)
+  RadF_Min  EditBox
+  RadF_Max  EditBox
+  RadF_Step  EditBox
+  OzrLegEther  Frame (parts: OzrLegEtherBar)
+  OzrLegEtherText  TextWidget (a caption: recolour only)
+  RadGrid  TextWidget (filled by script)
+  RadEther  TextWidget (filled by script)
+  OzrWarn  Frame (parts: OzrWarnEdge, OzrWarnBg)
+  OzrWarnA  TextWidget (a caption: recolour only)
+  OzrWarnB  TextWidget (a caption: recolour only)
+  OzrLegCheck  Frame (parts: OzrLegCheckBar)
+  OzrLegCheckText  TextWidget (a caption: recolour only)
+  OzrDot0  ImageWidget (the sign ✓: icon check)
+  RadF_Chan  TextWidget (filled by script)
+  OzrDot1  ImageWidget (the sign ✓: icon check)
+  RadF_Fit1  TextWidget (filled by script)
+  OzrDot2  ImageWidget (the sign ✓: icon check)
+  RadF_Fit2  TextWidget (filled by script)
+  BtnRadDel  ButtonWidget (parts: BtnRadDelEdge, BtnRadDelBg)
+
+ROW TEMPLATES
+  ozr_vpp_profile_row.layout  root OZR_VppProfileRow (Button), 7 in the sample, 487 x 42 units, list OzrListRows
+      OZR_VppProfileRow  ButtonWidget (parts: OZR_VppProfileRowEdge, OZR_VppProfileRowBg)
+      OzrRowCls  TextWidget (filled by script)
+      OzrRowBand  TextWidget (filled by script)
+      OzrRowRange  TextWidget (filled by script)
+
+CSS THE ENGINE HAS NO ANSWER FOR
+  border style dashed (drawn solid)  x1
+  border-radius  x15
+  letter-spacing 0.5px (no tracked face for Fira Sans 600)  x1
